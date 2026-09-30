@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, FolderArchive, FileSpreadsheet, ClipboardCheck, ListChecks, Layers, ChevronsLeft, ChevronsRight, Sparkles, Clock, FileCheck, ChevronDown, Upload, UserPlus, Plus, X } from "lucide-react";
+import { Users, FolderArchive, FileSpreadsheet, ClipboardCheck, ListChecks, Layers, ChevronsLeft, ChevronsRight, Clock, FileCheck, ChevronDown, Upload, UserPlus, Plus, X } from "lucide-react";
 import { UserRole, ActiveMenuKey, UserAccount, StandardMenuKey, ROLE_PERMISSIONS_MATRIX, AccessPermission } from "../types";
 
 interface SidebarProps {
@@ -12,7 +12,6 @@ interface SidebarProps {
   isMobileOpen: boolean;
   onCloseMobile: () => void;
   currentUser: UserAccount;
-  onOpenPromptModal: () => void;
   counts?: {
     users?: number;
     regulations?: number;
@@ -24,7 +23,7 @@ interface SidebarProps {
   };
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSelectMenu, onOpenAddUserModal, isCollapsed, onToggleCollapse, isMobileOpen, onCloseMobile, currentUser, onOpenPromptModal, counts = {} }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSelectMenu, onOpenAddUserModal, isCollapsed, onToggleCollapse, isMobileOpen, onCloseMobile, currentUser, counts = {} }) => {
   const getRoleHeaderInfo = () => {
     switch (activeRole) {
       case "superadmin":
@@ -572,17 +571,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
         </nav>
       </div>
 
-      {/* Bottom Footer Section: Prompt AI Studio & User Snapshot */}
+      {/* Bottom Footer Section: User Snapshot */}
       <div className="p-3 border-t border-sky-100 dark:border-slate-800 space-y-2">
-        <button
-          onClick={onOpenPromptModal}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 transition-colors shadow-2xs cursor-pointer"
-          title="Master Prompt Gemini AI Studio & Python Backend"
-        >
-          <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-          {!isSidebarCompact && <span className="truncate">Prompt AI Studio</span>}
-        </button>
-
         {!isSidebarCompact && (
           <div className="px-2.5 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
             <div className="font-bold text-slate-900 dark:text-white truncate">{currentUser.name}</div>

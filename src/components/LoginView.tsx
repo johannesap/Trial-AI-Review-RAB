@@ -1,17 +1,16 @@
 import React, { useState } from "react";
 import { UserAccount } from "../types";
 import { INITIAL_USERS } from "../data/initialUsers";
-import { Lock, User, AlertCircle, HelpCircle, ArrowRight, Eye, EyeOff, Sparkles, Sun, Moon } from "lucide-react";
+import { Lock, User, AlertCircle, HelpCircle, ArrowRight, Eye, EyeOff, Sun, Moon } from "lucide-react";
 
 interface LoginViewProps {
   users: UserAccount[];
   theme?: "light" | "dark";
   onToggleTheme?: () => void;
   onLoginSuccess: (user: UserAccount) => void;
-  onOpenPromptModal: () => void;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ users, theme = "light", onToggleTheme, onLoginSuccess, onOpenPromptModal }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ users, theme = "light", onToggleTheme, onLoginSuccess }) => {
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -74,7 +73,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, theme = "light", on
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-200 via-sky-100 to-sky-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased text-slate-900 dark:text-slate-100 transition-colors">
-      {/* Top Simple Master Prompt AI Button & Theme Toggle */}
+      {/* Theme Toggle */}
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2">
         {onToggleTheme && (
           <button
@@ -88,15 +87,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, theme = "light", on
             {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
           </button>
         )}
-        <button
-          type="button"
-          onClick={onOpenPromptModal}
-          className="px-3.5 py-2 bg-white/80 dark:bg-slate-800 hover:bg-cyan-50/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-sky-200/80 dark:border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer backdrop-blur-xs"
-          title="Lihat Konfigurasi Prompt Gemini AI Studio"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-          <span className="hidden sm:inline">Prompt AI Studio</span>
-        </button>
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">

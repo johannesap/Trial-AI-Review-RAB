@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { UserAccount, UserRole } from "../types";
-import { User as UserIcon, ChevronDown, LogOut, KeyRound, RefreshCw, Sparkles, ShieldCheck, Building, Menu } from "lucide-react";
+import { User as UserIcon, ChevronDown, LogOut, KeyRound, RefreshCw, ShieldCheck, Building, Menu } from "lucide-react";
 export type AppNavTab = "dashboard" | "satker" | "verifikator" | "regulations" | "master" | "superadmin";
 
 interface HeaderProps {
@@ -9,12 +9,11 @@ interface HeaderProps {
   activeTab: AppNavTab;
   onSwitchActiveRole: (role: UserRole) => void;
   onOpenChangePassword: () => void;
-  onOpenPromptModal: () => void;
   onLogout: () => void;
   onToggleMobileSidebar?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentUser, activeRole, activeTab, onSwitchActiveRole, onOpenChangePassword, onOpenPromptModal, onLogout, onToggleMobileSidebar }) => {
+export const Header: React.FC<HeaderProps> = ({ currentUser, activeRole, activeTab, onSwitchActiveRole, onOpenChangePassword, onLogout, onToggleMobileSidebar }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -146,17 +145,6 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, activeRole, activeT
                 >
                   <KeyRound className="w-4 h-4 text-slate-400" />
                   <span>Ubah Kata Sandi</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onOpenPromptModal();
-                    setDropdownOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  <span>Panduan Master Prompt AI</span>
                 </button>
 
                 <button

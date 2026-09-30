@@ -1,6 +1,6 @@
 import React from "react";
 import { UserAccount, UserRole } from "../types";
-import { KeyRound, LogOut, Sparkles, Sun, Moon, Menu } from "lucide-react";
+import { KeyRound, LogOut, Sun, Moon, Menu } from "lucide-react";
 
 interface NavbarProps {
   currentUser: UserAccount;
@@ -9,11 +9,10 @@ interface NavbarProps {
   onToggleTheme: () => void;
   onToggleMobileSidebar: () => void;
   onOpenChangePassword: () => void;
-  onOpenPromptModal: () => void;
   onLogout: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentUser, activeRole, theme, onToggleTheme, onToggleMobileSidebar, onOpenChangePassword, onOpenPromptModal, onLogout }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentUser, activeRole, theme, onToggleTheme, onToggleMobileSidebar, onOpenChangePassword, onLogout }) => {
   const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
       case "superadmin":
@@ -63,17 +62,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, activeRole, theme, 
 
         {/* Right: Actions, Single Role Badge & User Profile */}
         <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-          {/* Master Prompt AI Studio & Python Backend button */}
-          <button
-            id="btn-nav-prompt-modal"
-            onClick={onOpenPromptModal}
-            className="hidden sm:flex px-3 py-1.5 bg-slate-50 dark:bg-slate-800 hover:bg-cyan-50/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-            title="Lihat Prompt Gemini AI Studio & Panduan Backend Python"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span className="hidden md:inline">Prompt AI Studio</span>
-          </button>
-
           {/* Theme Toggle Button (Light / Dark Mode) */}
           <button
             id="btn-toggle-theme"

@@ -11,7 +11,6 @@ import { SatkerView } from "./components/SatkerView";
 import { VerifikatorView } from "./components/VerifikatorView";
 import { MasterRoView } from "./components/MasterRoView";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
-import { PromptModal } from "./components/PromptModal";
 
 // Helper to map any ActiveMenuKey to StandardMenuKey
 export const toStandardMenuKey = (menuKey: ActiveMenuKey | string): StandardMenuKey => {
@@ -209,7 +208,6 @@ export default function App() {
 
   // Modals
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [addUserModalTrigger, setAddUserModalTrigger] = useState(0);
 
   // Sync to localStorage safely
@@ -383,12 +381,7 @@ export default function App() {
 
   // If not logged in, render Login View
   if (!currentUser) {
-    return (
-      <>
-        <LoginView users={users} theme={theme} onToggleTheme={handleToggleTheme} onLoginSuccess={handleLogin} onOpenPromptModal={() => setIsPromptModalOpen(true)} />
-        <PromptModal isOpen={isPromptModalOpen} onClose={() => setIsPromptModalOpen(false)} />
-      </>
-    );
+    return <LoginView users={users} theme={theme} onToggleTheme={handleToggleTheme} onLoginSuccess={handleLogin} />;
   }
 
   // Canonical standard menu and permission for current view
@@ -405,7 +398,6 @@ export default function App() {
         onToggleTheme={handleToggleTheme}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
         onOpenChangePassword={() => setIsPasswordModalOpen(true)}
-        onOpenPromptModal={() => setIsPromptModalOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -436,7 +428,6 @@ export default function App() {
           isMobileOpen={isMobileSidebarOpen}
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
           currentUser={currentUser}
-          onOpenPromptModal={() => setIsPromptModalOpen(true)}
           counts={{
             users: users.length,
             regulations: regulations.filter((r) => r.isActive).length,
@@ -481,7 +472,6 @@ export default function App() {
                     onUpdateRegulation={handleUpdateRegulation}
                     onDeleteRegulation={handleDeleteRegulation}
                     onToggleRegulationActive={handleToggleRegulationActive}
-                    onOpenPromptModal={() => setIsPromptModalOpen(true)}
                   />
                 )}
 
@@ -501,7 +491,6 @@ export default function App() {
                     onUpdateRegulation={handleUpdateRegulation}
                     onDeleteRegulation={handleDeleteRegulation}
                     onToggleRegulationActive={handleToggleRegulationActive}
-                    onOpenPromptModal={() => setIsPromptModalOpen(true)}
                   />
                 )}
 
@@ -571,8 +560,6 @@ export default function App() {
 
       {/* Modals */}
       <ChangePasswordModal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} currentUser={currentUser} onUpdatePassword={handleUpdatePassword} />
-
-      <PromptModal isOpen={isPromptModalOpen} onClose={() => setIsPromptModalOpen(false)} />
     </div>
   );
 }

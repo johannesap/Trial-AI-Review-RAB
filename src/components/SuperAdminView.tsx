@@ -12,7 +12,6 @@ import {
   AlertCircle,
   CheckCircle,
   X,
-  Sparkles,
   BookOpen,
   FileText,
   Upload,
@@ -116,7 +115,6 @@ interface SuperAdminViewProps {
   onUpdateRegulation: (reg: RegulationDocument) => void;
   onDeleteRegulation: (regId: string) => void;
   onToggleRegulationActive: (regId: string) => void;
-  onOpenPromptModal: () => void;
 }
 
 export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
@@ -134,7 +132,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
   onUpdateRegulation,
   onDeleteRegulation,
   onToggleRegulationActive,
-  onOpenPromptModal,
 }) => {
   // Current view derived from activeMenu ("admin_users" / "menu_users" vs "admin_regulations" / "menu_acuan" / "admin_add_regulation")
   const currentView = activeMenu === "admin_regulations" || activeMenu === "menu_acuan" || (activeMenu as string) === "admin_add_regulation" ? "regulations" : "users";
@@ -541,15 +538,6 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={onOpenPromptModal}
-                className="h-10 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-xl text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-2 transition-all shadow-2xs cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-                <span>Prompt AI Studio</span>
-              </button>
-            </div>
           </div>
         </div>
       )}
