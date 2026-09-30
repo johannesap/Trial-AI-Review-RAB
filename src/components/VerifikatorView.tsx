@@ -161,7 +161,10 @@ export const VerifikatorView: React.FC<VerifikatorViewProps> = ({
     setTimeout(() => setSaveSuccess(false), 2500);
   };
 
-  const totalRows = editableCriteria.length;
+  const totalRows = editableCriteria.length > 0 ? editableCriteria.length : 20;
+  const aiPassedRows = editableCriteria.length > 0
+    ? editableCriteria.filter((c) => c.status === "passed").length
+    : (selectedSubmission?.aiScore !== undefined ? Math.round((selectedSubmission.aiScore / 100) * totalRows) : (selectedSubmission?.aiStatus === "LOLOS" ? 20 : 0));
   const verifierPassedRows = editableCriteria.filter((c) => c.verifierStatus === "Lolos").length;
   const verifierRejectedRows = editableCriteria.filter((c) => c.verifierStatus === "Ditolak").length;
 
@@ -518,7 +521,7 @@ export const VerifikatorView: React.FC<VerifikatorViewProps> = ({
                             <div className="space-y-4">
                               <div className="flex items-center justify-between pb-2">
                                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                                  B. Hasil Penelaahan AI &amp; Evaluasi Verifikator Baris per Baris (20 Kriteria)
+                                  B. Hasil Penelaahan AI &amp; Evaluasi Verifikator Baris per Baris ({totalRows} Kriteria)
                                 </span>
 
                                 <div className="flex items-center gap-2">
@@ -529,7 +532,7 @@ export const VerifikatorView: React.FC<VerifikatorViewProps> = ({
                                         : "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
                                     }`}
                                   >
-                                    AI: {selectedSubmission.aiStatus} ({selectedSubmission.aiScore}%)
+                                    AI: {selectedSubmission.aiStatus} ({aiPassedRows}/{totalRows})
                                   </span>
                                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-100 dark:bg-cyan-950/60 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
                                     Verifikator: {verifierPassedRows} Lolos / {verifierRejectedRows} Ditolak

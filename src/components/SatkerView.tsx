@@ -156,6 +156,58 @@ const parseSubmittedDateToYMD = (dateStr: string): string | null => {
   return null;
 };
 
+export interface RabCategoryOption {
+  value: string;
+  label: string;
+  description: string;
+}
+
+export const RAB_CATEGORY_OPTIONS: RabCategoryOption[] = [
+  {
+    value: "RO Wajib",
+    label: "RO Wajib",
+    description:
+      "Kategori ini merupakan RO yang bersifat wajib, mengikat, ditetapkan melalui kebijakan penganggaran nasional, dan harus tetap berjalan secara berkelanjutan. Penilaian terhadap RO pada kategori ini tidak ditujukan untuk menilai perlu atau tidaknya RO, melainkan untuk memvalidasi kesesuaian ruang lingkup, kejelasan kebutuhan dasar, dan keterkaitan komponen dengan RO yang diusulkan;",
+  },
+  {
+    value: "RO Prioritas Strategis",
+    label: "RO Prioritas Strategis",
+    description:
+      "Kategori ini merupakan RO prioritas yang ditetapkan secara resmi oleh Menteri, dan/atau penguatan layanan esensial. Penilaian RO terhadap kategori ini dilaksanakan secara penuh sesuai parameter penilaian substansi.",
+  },
+  {
+    value: "RO Strategis/Diskresioner",
+    label: "RO Strategis/Diskresioner",
+    description:
+      "Kategori ini merupakan RO yang memiliki keterkaitan dengan prioritas pembangunan nasional dan pencapaian sasaran kementerian, serta mendukung tugas dan fungsi Satker, namun tidak memenuhi kriteria Kategori 1 maupun Kategori 2; dan",
+  },
+  {
+    value: "RO Non-Strategis",
+    label: "RO Non-Strategis",
+    description:
+      "Kategori ini merupakan RO yang tidak memenuhi kriteria Kategori 1, Kategori 2, maupun Kategori 3, serta tidak memiliki keterkaitan dengan tugas dan fungsi Satker pengusul, maupun pencapaian sasaran strategis kementerian. Terhadap RO yang masuk ke dalam kategori ini tidak diteruskan ke tahap berikutnya.",
+  },
+];
+
+export const findRabCategory = (catName?: string): RabCategoryOption | undefined => {
+  if (!catName) return undefined;
+  const lower = catName.toLowerCase().trim();
+  return RAB_CATEGORY_OPTIONS.find((c) => {
+    const cLower = c.value.toLowerCase();
+    const cLabel = c.label.toLowerCase();
+    return (
+      cLower === lower ||
+      cLabel === lower ||
+      lower.includes(cLower) ||
+      cLower.includes(lower) ||
+      (lower.includes("1") && cLower.includes("wajib")) ||
+      (lower.includes("2") && cLower.includes("prioritas")) ||
+      (lower.includes("3") && cLower.includes("diskresioner")) ||
+      (lower.includes("4") && cLower.includes("non-strategis"))
+    );
+  });
+};
+
 export const SatkerView: React.FC<SatkerViewProps> = ({
   currentUser,
   onAddSubmission,
@@ -268,16 +320,25 @@ export const SatkerView: React.FC<SatkerViewProps> = ({
 
   // Edit form state
   const [editFileName, setEditFileName] = useState("");
-  const [editKategori, setEditKategori] = useState("Kategori 1");
-  const [editDeskripsi, setEditDeskripsi] = useState("");
+  const [editKategori, setEditKategori] = useState<string>(RAB_CATEGORY_OPTIONS[0].value);
+  const [editDeskripsi, setEditDeskripsi] = useState<string>(RAB_CATEGORY_OPTIONS[0].description);
   const [editTahunAnggaran, setEditTahunAnggaran] = useState("2026");
 
   const handleOpenEdit = (sub: SubmissionData) => {
     setEditItem(sub);
     setEditFileName(sub.rabFileName);
-    setEditKategori(sub.kategori || sub.kategori1 || "Kategori 1");
-    setEditDeskripsi(sub.deskripsi || "");
+    const matched = findRabCategory(sub.kategori || sub.kategori1);
+    setEditKategori(matched ? matched.value : (sub.kategori || sub.kategori1 || RAB_CATEGORY_OPTIONS[0].value));
+    setEditDeskripsi(sub.deskripsi || (matched ? matched.description : RAB_CATEGORY_OPTIONS[0].description));
     setEditTahunAnggaran(sub.tahunAnggaran || "2026");
+  };
+
+  const handleEditKategoriChange = (newVal: string) => {
+    setEditKategori(newVal);
+    const matched = RAB_CATEGORY_OPTIONS.find((c) => c.value === newVal);
+    if (matched) {
+      setEditDeskripsi(matched.description);
+    }
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -343,9 +404,19 @@ export const SatkerView: React.FC<SatkerViewProps> = ({
   const [currentUnitEselon2, setCurrentUnitEselon2] = useState<string>("");
   const [currentPrioritas, setCurrentPrioritas] = useState<string>("");
 
-  // Klasifikasi Kategori (Dropdown: Kategori 1, Kategori 2, Kategori 3) & Deskripsi (Kolom Teks)
-  const [formKategori, setFormKategori] = useState<string>("Kategori 1");
-  const [formDeskripsi, setFormDeskripsi] = useState<string>("");
+  // Klasifikasi Kategori (Dropdown 4 Kategori) & Deskripsi (Kolom Teks Otomatis Terisi)
+  const [formKategori, setFormKategori] = useState<string>(RAB_CATEGORY_OPTIONS[0].value);
+  const [formDeskripsi, setFormDeskripsi] = useState<string>(RAB_CATEGORY_OPTIONS[0].description);
+
+  const handleCategoryChange = (newVal: string) => {
+    setFormKategori(newVal);
+    const matched = RAB_CATEGORY_OPTIONS.find((c) => c.value === newVal);
+    if (matched) {
+      setFormDeskripsi(matched.description);
+    } else {
+      setFormDeskripsi("");
+    }
+  };
 
   // File Upload State: RAB PDF ONLY
   const [rabFile, setRabFile] = useState<File | null>(null);
@@ -460,8 +531,8 @@ export const SatkerView: React.FC<SatkerViewProps> = ({
     setCurrentUnitEselon1("");
     setCurrentUnitEselon2("");
     setCurrentPrioritas("");
-    setFormKategori("Kategori 1");
-    setFormDeskripsi("");
+    setFormKategori(RAB_CATEGORY_OPTIONS[0].value);
+    setFormDeskripsi(RAB_CATEGORY_OPTIONS[0].description);
 
     if (rabBlobUrl && rabBlobUrl.startsWith("blob:")) {
       URL.revokeObjectURL(rabBlobUrl);
@@ -491,8 +562,9 @@ export const SatkerView: React.FC<SatkerViewProps> = ({
     setCurrentUnitEselon1(sub.unitEselon1);
     setCurrentUnitEselon2(sub.unitEselon2);
     setCurrentPrioritas(sub.prioritas);
-    setFormKategori(sub.kategori || sub.kategori1 || "Kategori 1");
-    setFormDeskripsi(sub.deskripsi || "");
+    const matchedKat = findRabCategory(sub.kategori || sub.kategori1);
+    setFormKategori(matchedKat ? matchedKat.value : (sub.kategori || sub.kategori1 || RAB_CATEGORY_OPTIONS[0].value));
+    setFormDeskripsi(sub.deskripsi || (matchedKat ? matchedKat.description : RAB_CATEGORY_OPTIONS[0].description));
 
     setSelectedDetailSubmission(null);
     if (onSelectMenu) {
@@ -1485,13 +1557,18 @@ export const SatkerView: React.FC<SatkerViewProps> = ({
 
                 {/* SUB-SECTION B: KLASIFIKASI KATEGORI & DESKRIPSI USULAN RAB */}
                 <div className="p-5 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 rounded-2xl space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">B. Klasifikasi Kategori Usulan RAB</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">B. Klasifikasi Kategori Usulan RAB</span>
+                    </div>
+                    <span className="text-[11px] text-cyan-700 dark:text-cyan-300 font-semibold bg-cyan-100/80 dark:bg-cyan-950/70 px-2.5 py-0.5 rounded-full border border-cyan-300 dark:border-cyan-800 w-fit">
+                      Deskripsi otomatis terisi sesuai kategori yang dipilih
+                    </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Kategori (Dropdown pilihan: Kategori 1, Kategori 2, Kategori 3) */}
+                    {/* Kategori (Dropdown pilihan: 4 Kategori RO) */}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                         Kategori <span className="text-rose-500">*</span>
@@ -1500,33 +1577,33 @@ export const SatkerView: React.FC<SatkerViewProps> = ({
                         <select
                           id="select-kategori"
                           value={formKategori}
-                          onChange={(e) => setFormKategori(e.target.value)}
-                          className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white appearance-none pr-8 font-medium shadow-2xs cursor-pointer"
+                          onChange={(e) => handleCategoryChange(e.target.value)}
+                          className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white appearance-none pr-8 font-semibold shadow-2xs cursor-pointer"
                         >
-                          <option value="" disabled>
-                            -- Pilih Kategori --
-                          </option>
-                          <option value="Kategori 1">Kategori 1</option>
-                          <option value="Kategori 2">Kategori 2</option>
-                          <option value="Kategori 3">Kategori 3</option>
+                          {RAB_CATEGORY_OPTIONS.map((cat) => (
+                            <option key={cat.value} value={cat.value} className="dark:bg-slate-800 dark:text-white">
+                              {cat.label}
+                            </option>
+                          ))}
                         </select>
                         <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 leading-normal">
+                        Pilih kategori untuk memuat deskripsi klasifikasi RO secara otomatis.
+                      </p>
                     </div>
 
-                    {/* Deskripsi (Kolom teks disamping Kategori) */}
+                    {/* Deskripsi (Otomatis terisi & tidak bisa diedit) */}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                        Deskripsi <span className="text-slate-400 font-normal lowercase">(kolom teks)</span>
+                        Deskripsi <span className="text-slate-400 font-normal lowercase">(otomatis terisi)</span>
                       </label>
-                      <input
-                        id="input-deskripsi"
-                        type="text"
-                        value={formDeskripsi}
-                        onChange={(e) => setFormDeskripsi(e.target.value)}
-                        placeholder="Contoh: Belanja Modal TIK, Pengadaan Server, Bimtek..."
-                        className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white shadow-2xs"
-                      />
+                      <div
+                        id="view-deskripsi"
+                        className="w-full min-h-[96px] p-3.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 shadow-2xs leading-relaxed select-text"
+                      >
+                        <p>{formDeskripsi || "Pilih kategori untuk memuat deskripsi..."}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1852,15 +1929,24 @@ export const SatkerView: React.FC<SatkerViewProps> = ({
                   <span className="font-bold text-sm text-slate-900 dark:text-white mt-0.5 block">{selectedDetailSubmission.verificationStatus}</span>
                   {selectedDetailSubmission.verifikatorNotes && <p className="text-slate-600 dark:text-slate-300 mt-1">Catatan: {selectedDetailSubmission.verifikatorNotes}</p>}
                 </div>
-                <span
-                  className={`px-3 py-1 rounded-full font-bold text-xs ${
-                    selectedDetailSubmission.aiStatus === "LOLOS"
-                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                      : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
-                  }`}
-                >
-                  AI: {selectedDetailSubmission.aiStatus} ({selectedDetailSubmission.aiScore}%)
-                </span>
+                {(() => {
+                  const detailCriteria = Array.isArray(selectedDetailSubmission.criteriaResults) ? selectedDetailSubmission.criteriaResults : [];
+                  const detailTotal = detailCriteria.length > 0 ? detailCriteria.length : 20;
+                  const detailPassed = detailCriteria.length > 0
+                    ? detailCriteria.filter((c) => c.status === "passed").length
+                    : (selectedDetailSubmission.aiScore !== undefined ? Math.round((selectedDetailSubmission.aiScore / 100) * detailTotal) : (selectedDetailSubmission.aiStatus === "LOLOS" ? 20 : 0));
+                  return (
+                    <span
+                      className={`px-3 py-1 rounded-full font-bold text-xs ${
+                        selectedDetailSubmission.aiStatus === "LOLOS"
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                          : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                      }`}
+                    >
+                      AI: {selectedDetailSubmission.aiStatus} ({detailPassed}/{detailTotal})
+                    </span>
+                  );
+                })()}
               </div>
 
               {/* Hierarchy and Categories */}
@@ -1965,12 +2051,14 @@ export const SatkerView: React.FC<SatkerViewProps> = ({
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Kategori</label>
                   <select
                     value={editKategori}
-                    onChange={(e) => setEditKategori(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium"
+                    onChange={(e) => handleEditKategoriChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium cursor-pointer"
                   >
-                    <option value="Kategori 1">Kategori 1</option>
-                    <option value="Kategori 2">Kategori 2</option>
-                    <option value="Kategori 3">Kategori 3</option>
+                    {RAB_CATEGORY_OPTIONS.map((cat) => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1987,14 +2075,12 @@ export const SatkerView: React.FC<SatkerViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Deskripsi</label>
-                <input
-                  type="text"
-                  value={editDeskripsi}
-                  onChange={(e) => setEditDeskripsi(e.target.value)}
-                  placeholder="Keterangan / deskripsi usulan..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium"
-                />
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Deskripsi <span className="text-slate-400 font-normal lowercase">(otomatis terisi)</span>
+                </label>
+                <div className="w-full p-3 bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 leading-relaxed min-h-[72px] select-text">
+                  <p>{editDeskripsi || "Pilih kategori untuk memuat deskripsi..."}</p>
+                </div>
               </div>
 
               <div className="pt-2 text-[11px] text-slate-500 dark:text-slate-400">

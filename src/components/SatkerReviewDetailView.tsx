@@ -30,7 +30,10 @@ export const SatkerReviewDetailView: React.FC<SatkerReviewDetailViewProps> = ({ 
   const [reuploadErrorMessage, setReuploadErrorMessage] = useState<string | null>(null);
 
   const criteriaList = Array.isArray(currentSub.criteriaResults) ? currentSub.criteriaResults : [];
-  const passedCount = criteriaList.filter((c) => c.status === "passed").length;
+  const totalCriteriaCount = criteriaList.length > 0 ? criteriaList.length : 20;
+  const passedCount = criteriaList.length > 0
+    ? criteriaList.filter((c) => c.status === "passed").length
+    : (currentSub.aiScore !== undefined ? Math.round((currentSub.aiScore / 100) * totalCriteriaCount) : (currentSub.aiStatus === "LOLOS" ? 20 : 0));
   const verifierPassedCount = criteriaList.filter((c) => c.verifierStatus === "Lolos").length;
   const verifierRejectedCount = criteriaList.filter((c) => c.verifierStatus === "Ditolak").length;
 
@@ -348,7 +351,9 @@ export const SatkerReviewDetailView: React.FC<SatkerReviewDetailViewProps> = ({ 
             {/* BAGIAN B: HASIL PENELAAHAN AI & EVALUASI 20 KRITERIA */}
             <div className="space-y-4">
               <div className="flex items-center justify-between pb-2">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">B. Hasil Penelaahan AI &amp; Evaluasi Verifikator Baris per Baris (20 Kriteria)</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                  B. Hasil Penelaahan AI &amp; Evaluasi Verifikator Baris per Baris ({totalCriteriaCount} Kriteria)
+                </span>
 
                 <div className="flex items-center gap-2">
                   <span
@@ -358,7 +363,7 @@ export const SatkerReviewDetailView: React.FC<SatkerReviewDetailViewProps> = ({ 
                         : "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
                     }`}
                   >
-                    AI: {currentSub.aiStatus} ({currentSub.aiScore}%)
+                    AI: {currentSub.aiStatus} ({passedCount}/{totalCriteriaCount})
                   </span>
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-100 dark:bg-cyan-950/60 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
                     Verifikator: {verifierPassedCount} Lolos / {verifierRejectedCount} Ditolak
