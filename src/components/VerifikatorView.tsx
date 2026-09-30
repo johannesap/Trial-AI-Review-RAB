@@ -177,13 +177,20 @@ export const VerifikatorView: React.FC<VerifikatorViewProps> = ({
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Re-index otomatis dari 1..N agar urutan nomor selalu rapi dan kontinu
+          return parsed.map((c: MasterCriterion, idx: number) => ({
+            ...c,
+            id: idx + 1,
+          }));
         }
       } catch (e) {
         console.error(e);
       }
     }
-    return INITIAL_MASTER_CRITERIA;
+    return INITIAL_MASTER_CRITERIA.map((c, idx) => ({
+      ...c,
+      id: idx + 1,
+    }));
   });
 
   useEffect(() => {
@@ -200,11 +207,11 @@ export const VerifikatorView: React.FC<VerifikatorViewProps> = ({
 
   // Form Input Checklist Baru State
   // Sesuai Instruksi:
-  // a. No (otomatis)
+  // a. No (otomatis berurutan berikutnya)
   // b. Kriteria (Teks)
   // c. Deskripsi (Teks)
   // d. Aktif dan Tidak Aktif serta Aksi (CRUD) HANYA muncul di tabel saja!
-  const nextCriterionNo = checklistCriteria.length > 0 ? Math.max(...checklistCriteria.map((c) => c.id)) + 1 : 1;
+  const nextCriterionNo = checklistCriteria.length + 1;
   const [inputKriteriaText, setInputKriteriaText] = useState("");
   const [inputDeskripsiText, setInputDeskripsiText] = useState("");
   const [formChecklistError, setFormChecklistError] = useState<string | null>(null);
@@ -246,7 +253,14 @@ export const VerifikatorView: React.FC<VerifikatorViewProps> = ({
 
   const handleConfirmDelete = () => {
     if (!deleteCandidate) return;
-    setChecklistCriteria((prev) => prev.filter((c) => c.id !== deleteCandidate.id));
+    setChecklistCriteria((prev) => {
+      const remaining = prev.filter((c) => c.id !== deleteCandidate.id);
+      // Re-index kembali dari 1 s/d N agar nomor urut selalu rapi dan tidak tumpang longkap
+      return remaining.map((c, idx) => ({
+        ...c,
+        id: idx + 1,
+      }));
+    });
     setDeleteCandidate(null);
   };
 
@@ -269,7 +283,7 @@ export const VerifikatorView: React.FC<VerifikatorViewProps> = ({
     setFormChecklistError(null);
 
     const newCriterion: MasterCriterion = {
-      id: nextCriterionNo,
+      id: checklistCriteria.length + 1,
       text: inputKriteriaText.trim(),
       description: inputDeskripsiText.trim(),
       isActive: true, // Default aktif di tabel
