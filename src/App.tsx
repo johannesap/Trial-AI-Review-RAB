@@ -180,6 +180,11 @@ export default function App() {
 
   // Sidebar Collapsed State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMobileSidebarOpen(false);
+  }, [activeMenu]);
 
   // Theme State: 'light' or 'dark' (Persistent)
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -398,24 +403,38 @@ export default function App() {
         activeRole={activeRole}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
         onOpenChangePassword={() => setIsPasswordModalOpen(true)}
         onOpenPromptModal={() => setIsPromptModalOpen(true)}
         onLogout={handleLogout}
       />
 
       {/* Dashboard Layout: Sidebar di sebelah kiri + MainContent di sebelah kanan */}
-      <div className="flex-1 flex min-w-0 overflow-hidden">
+      <div className="flex-1 flex min-w-0 overflow-visible md:overflow-hidden">
+        {isMobileSidebarOpen && (
+          <button
+            type="button"
+            aria-label="Tutup menu navigasi"
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="fixed inset-0 z-40 bg-slate-950/50 md:hidden"
+          />
+        )}
         {/* Sidebar Navigasi Dinamis Berdasarkan Role (Super Admin, ROCAN, Satker) */}
         <Sidebar
           activeRole={activeRole}
           activeMenu={activeMenu}
-          onSelectMenu={setActiveMenu}
+          onSelectMenu={(menu) => {
+            setActiveMenu(menu);
+            setIsMobileSidebarOpen(false);
+          }}
           onOpenAddUserModal={() => {
             setActiveMenu("admin_add_user");
             setAddUserModalTrigger((prev) => prev + 1);
           }}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
           currentUser={currentUser}
           onOpenPromptModal={() => setIsPromptModalOpen(true)}
           counts={{

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, FolderArchive, FileSpreadsheet, ClipboardCheck, ListChecks, Layers, ChevronsLeft, ChevronsRight, Sparkles, Clock, FileCheck, ChevronDown, Upload, UserPlus, Plus } from "lucide-react";
+import { Users, FolderArchive, FileSpreadsheet, ClipboardCheck, ListChecks, Layers, ChevronsLeft, ChevronsRight, Sparkles, Clock, FileCheck, ChevronDown, Upload, UserPlus, Plus, X } from "lucide-react";
 import { UserRole, ActiveMenuKey, UserAccount, StandardMenuKey, ROLE_PERMISSIONS_MATRIX, AccessPermission } from "../types";
 
 interface SidebarProps {
@@ -9,6 +9,8 @@ interface SidebarProps {
   onOpenAddUserModal?: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  isMobileOpen: boolean;
+  onCloseMobile: () => void;
   currentUser: UserAccount;
   onOpenPromptModal: () => void;
   counts?: {
@@ -22,7 +24,7 @@ interface SidebarProps {
   };
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSelectMenu, onOpenAddUserModal, isCollapsed, onToggleCollapse, currentUser, onOpenPromptModal, counts = {} }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSelectMenu, onOpenAddUserModal, isCollapsed, onToggleCollapse, isMobileOpen, onCloseMobile, currentUser, onOpenPromptModal, counts = {} }) => {
   const getRoleHeaderInfo = () => {
     switch (activeRole) {
       case "superadmin":
@@ -53,6 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
   };
 
   const roleInfo = getRoleHeaderInfo();
+  const isSidebarCompact = isCollapsed && !isMobileOpen;
 
   const [isVerificationExpanded, setIsVerificationExpanded] = useState(true);
   const [isRabListExpanded, setIsRabListExpanded] = useState(true);
@@ -171,15 +174,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
 
   return (
     <aside
-      className={`bg-white dark:bg-slate-900 border-r border-sky-200/80 dark:border-slate-800 flex flex-col justify-between transition-all duration-300 z-30 shrink-0 select-none shadow-xs ${
-        isCollapsed ? "w-20" : "w-64"
-      }`}
+      className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] overflow-y-auto bg-white dark:bg-slate-900 border-r border-sky-200/80 dark:border-slate-800 flex flex-col justify-between transition-transform duration-300 md:static md:inset-auto md:z-30 md:max-w-none md:overflow-visible md:transition-[width] shrink-0 select-none shadow-xs ${
+        isMobileOpen ? "translate-x-0" : "-translate-x-full"
+      } md:translate-x-0 ${isCollapsed ? "md:w-20" : "md:w-64"}`}
     >
       {/* Top Header & Navigation Links */}
       <div>
         {/* Sidebar Header & Collapse Toggle */}
         <div className="h-14 px-3.5 flex items-center justify-between border-b border-sky-100 dark:border-slate-800">
-          {!isCollapsed ? (
+          {!isSidebarCompact ? (
             <div className="flex items-center gap-2">
               <span className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Menu Navigasi</span>
             </div>
@@ -189,17 +192,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
 
           {/* Collapse Toggle Button */}
           <button
-            onClick={onToggleCollapse}
-            className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
-            title={isCollapsed ? "Perluas Sidebar" : "Perkecil Sidebar"}
+            type="button"
+            onClick={onCloseMobile}
+            className="md:hidden p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            title="Tutup Menu Navigasi"
+            aria-label="Tutup menu navigasi"
           >
-            {isCollapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
+            <X className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onToggleCollapse}
+            className="hidden md:inline-flex p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            title={isSidebarCompact ? "Perluas Sidebar" : "Perkecil Sidebar"}
+            type="button"
+          >
+            {isSidebarCompact ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
           </button>
         </div>
 
         {/* Dedicated Role Badge Section (Single Role) */}
         <div className="px-4 pt-4 pb-2">
-          {!isCollapsed ? (
+          {!isSidebarCompact ? (
             <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Role Akun</span>
@@ -216,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
 
         {/* Section Title */}
         <div className="px-5 pt-3 pb-1">
-          {!isCollapsed ? (
+          {!isSidebarCompact ? (
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Menu Akses</span>
               <span className="text-[10px] text-slate-400 font-mono">{visibleMenus.length} Menu</span>
@@ -245,7 +258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
                     id={`sidebar-menu-${item.key}`}
                     type="button"
                     onClick={() => {
-                      if (isCollapsed) {
+                      if (isSidebarCompact) {
                         onSelectMenu("satker_list");
                       } else {
                         if (isRabListActive) {
@@ -263,7 +276,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon className={`w-5 h-5 shrink-0 ${active ? "text-white" : roleInfo.iconColor}`} />
-                      {!isCollapsed && (
+                      {!isSidebarCompact && (
                         <div className="truncate">
                           <div className="text-xs font-bold truncate flex items-center gap-1.5">
                             <span>{item.label}</span>
@@ -273,7 +286,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
                       )}
                     </div>
 
-                    {!isCollapsed && (
+                    {!isSidebarCompact && (
                       <div className="flex items-center gap-1.5 shrink-0">
                         {/* E / V Permission Indicator Pill */}
                         <span
@@ -309,7 +322,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
                   </button>
 
                   {/* Sub-menu Branches (Cabang) under Daftar RAB */}
-                  {!isCollapsed && isRabListExpanded && (
+                  {!isSidebarCompact && isRabListExpanded && (
                     <div className="ml-4 pl-3 border-l-2 border-slate-300 dark:border-slate-700 space-y-1 pt-1 pb-1 transition-all">
                       {/* Branch 1: Daftar & Riwayat RAB */}
                       <button
@@ -377,7 +390,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
                     id={`sidebar-menu-${item.key}`}
                     type="button"
                     onClick={() => {
-                      if (isCollapsed) {
+                      if (isSidebarCompact) {
                         onSelectMenu("verifikator_pending");
                       } else {
                         if (isVerificationActive) {
@@ -395,7 +408,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon className={`w-5 h-5 shrink-0 ${active ? "text-white" : roleInfo.iconColor}`} />
-                      {!isCollapsed && (
+                      {!isSidebarCompact && (
                         <div className="truncate">
                           <div className="text-xs font-bold truncate flex items-center gap-1.5">
                             <span>{item.label}</span>
@@ -405,7 +418,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
                       )}
                     </div>
 
-                    {!isCollapsed && (
+                    {!isSidebarCompact && (
                       <div className="flex items-center gap-1.5 shrink-0">
                         {/* E / V Permission Indicator Pill */}
                         <span
@@ -441,7 +454,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
                   </button>
 
                   {/* Sub-menu Branches (Cabang) under > Verifikasi */}
-                  {!isCollapsed && isVerificationExpanded && (
+                  {!isSidebarCompact && isVerificationExpanded && (
                     <div className="ml-4 pl-3 border-l-2 border-slate-300 dark:border-slate-700 space-y-1 pt-1 pb-1 transition-all">
                       {/* Branch 1: Dokumen Menunggu Telaah */}
                       <button
@@ -515,7 +528,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <Icon className={`w-5 h-5 shrink-0 ${active ? "text-white" : roleInfo.iconColor}`} />
-                  {!isCollapsed && (
+                  {!isSidebarCompact && (
                     <div className="truncate">
                       <div className="text-xs font-bold truncate flex items-center gap-1.5">
                         <span>{item.label}</span>
@@ -525,7 +538,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
                   )}
                 </div>
 
-                {!isCollapsed && (
+                {!isSidebarCompact && (
                   <div className="flex items-center gap-1.5 shrink-0">
                     {/* E / V Permission Indicator Pill */}
                     <span
@@ -567,10 +580,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeRole, activeMenu, onSele
           title="Master Prompt Gemini AI Studio & Python Backend"
         >
           <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-          {!isCollapsed && <span className="truncate">Prompt AI Studio</span>}
+          {!isSidebarCompact && <span className="truncate">Prompt AI Studio</span>}
         </button>
 
-        {!isCollapsed && (
+        {!isSidebarCompact && (
           <div className="px-2.5 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
             <div className="font-bold text-slate-900 dark:text-white truncate">{currentUser.name}</div>
             <div className="flex items-center justify-between text-[10px] font-mono pt-0.5">
