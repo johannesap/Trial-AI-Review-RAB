@@ -1400,7 +1400,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
                             id="filter-reg-category-select"
                             value={regFilterCategory}
                             onChange={(e) => setRegFilterCategory(e.target.value)}
-                            className="h-10 px-3.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-cyan-500 shadow-2xs cursor-pointer"
+                            className="h-10 min-w-0 flex-1 sm:flex-none px-3.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-cyan-500 shadow-2xs cursor-pointer"
                           >
                             <option value="all">Semua Kategori</option>
                             <option value="SBM">Standar Biaya Masukan (SBM)</option>
@@ -1422,12 +1422,12 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
                           filteredRegulations.map((reg) => (
                             <div
                               key={reg.id}
-                              className={`bg-slate-50/60 dark:bg-slate-800/40 border rounded-2xl p-6 shadow-xs transition-all ${
+                              className={`min-w-0 bg-slate-50/60 dark:bg-slate-800/40 border rounded-2xl p-4 sm:p-6 shadow-xs transition-all ${
                                 reg.isActive ? "border-emerald-300 dark:border-emerald-800/80 ring-1 ring-emerald-500/20" : "border-slate-200 dark:border-slate-800 opacity-80"
                               }`}
                             >
                               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                                <div className="flex items-start gap-4">
+                                <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                                   <div
                                     className={`p-3.5 rounded-2xl shrink-0 ${
                                       reg.isActive
@@ -1438,9 +1438,9 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
                                     <FileText className="w-6 h-6" />
                                   </div>
 
-                                  <div className="space-y-1.5">
+                                  <div className="min-w-0 flex-1 space-y-1.5">
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">{reg.title}</span>
+                                      <span className="break-words text-xs sm:text-sm font-bold text-slate-900 dark:text-white">{reg.title}</span>
                                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
                                         {reg.category}
                                       </span>
@@ -1451,20 +1451,20 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
                                       )}
                                     </div>
 
-                                    {reg.description && <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 max-w-3xl leading-relaxed">{reg.description}</p>}
+                                    {reg.description && <p className="break-words text-xs text-slate-600 dark:text-slate-400 line-clamp-2 max-w-3xl leading-relaxed">{reg.description}</p>}
 
                                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 dark:text-slate-500 font-mono pt-1">
-                                      <span className="flex items-center gap-1.5">
-                                        <FileSpreadsheet className="w-3.5 h-3.5" />
-                                        {reg.fileName} ({reg.fileSize})
+                                      <span className="flex min-w-0 items-start gap-1.5">
+                                        <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                                        <span className="min-w-0 break-all">{reg.fileName} ({reg.fileSize})</span>
                                       </span>
-                                      <span>&bull;</span>
-                                      <span className="flex items-center gap-1.5">
-                                        <Calendar className="w-3.5 h-3.5" />
-                                        Tanggal Dimasukkan: {reg.dateInserted || reg.uploadDate}
+                                      <span className="hidden sm:inline">&bull;</span>
+                                      <span className="flex min-w-0 items-start gap-1.5 break-words">
+                                        <Calendar className="w-3.5 h-3.5 shrink-0" />
+                                        <span className="min-w-0">Tanggal Dimasukkan: {reg.dateInserted || reg.uploadDate}</span>
                                       </span>
-                                      <span>&bull;</span>
-                                      <span>Pengunggah: {reg.uploadedBy}</span>
+                                      <span className="hidden sm:inline">&bull;</span>
+                                      <span className="min-w-0 break-words">Pengunggah: {reg.uploadedBy}</span>
                                     </div>
                                   </div>
                                 </div>
