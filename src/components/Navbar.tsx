@@ -53,7 +53,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentUser, activeRole, theme, 
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
               <h1 className="min-w-0 truncate text-xs sm:text-base font-extrabold text-slate-900 dark:text-white tracking-tight">Sistem Pengecekan File RAB AI</h1>
-              <span className="hidden sm:inline rounded-md bg-cyan-100 px-1.5 py-0.5 text-[10px] font-bold text-cyan-800 dark:bg-cyan-950/80 dark:text-cyan-300">OptiMa</span>
               <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">v2.6</span>
             </div>
             <p className="hidden sm:block text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-xs sm:max-w-md">Kementerian Komunikasi dan Digital RI &bull; Telaah Anggaran Berbasis LLM</p>
