@@ -1,13 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { UserAccount, SubmissionData } from '../types';
-import {
-  getUniquePrograms,
-  getKegiatansForProgram,
-  getKrosForKegiatan,
-  getRosForKro,
-  HIERARCHY_DATA
-} from '../data/budgetData';
-import { runAiRabAnalysis } from '../data/defaultCriteria';
+import React, { useState, useEffect } from "react";
+import { UserAccount, SubmissionData, ActiveMenuKey, RegulationDocument } from "../types";
+import { getUniquePrograms, getKegiatansForProgram, getKrosForKegiatan, getRosForKro, HIERARCHY_DATA } from "../data/budgetData";
+import { runAiRabAnalysis } from "../data/defaultCriteria";
 import {
   FileSpreadsheet,
   Upload,
@@ -18,652 +12,2188 @@ import {
   Sparkles,
   Printer,
   ChevronDown,
+  ChevronUp,
   Layers,
   Loader2,
   Check,
-  FileCheck
-} from 'lucide-react';
-import { PdfPreviewModal } from './PdfPreviewModal';
-import { PrintableReport } from './PrintableReport';
+  FileCheck,
+  BookOpen,
+  Scale,
+  AlertCircle,
+  Clock,
+  Search,
+  FileText,
+  ExternalLink,
+  RotateCcw,
+  Filter,
+  AlertTriangle,
+  ShieldCheck,
+  ArrowRight,
+  Info,
+  X,
+  Pencil,
+  History,
+  Tag,
+  Calendar,
+  FolderOpen,
+  PlusCircle,
+  ArrowLeft,
+} from "lucide-react";
+import { PdfPreviewModal } from "./PdfPreviewModal";
+import { PrintableReport } from "./PrintableReport";
+import { inspectUploadedRabDocument } from "../utils/pdfInspector";
+import { SatkerReviewDetailView } from "./SatkerReviewDetailView";
+import { storePdfBlob } from "../utils/pdfStorage";
 
 interface SatkerViewProps {
   currentUser: UserAccount;
   onAddSubmission: (submission: SubmissionData) => void;
+  onUpdateSubmission?: (submission: SubmissionData) => void;
+  onDeleteSubmission?: (submissionId: string) => void;
   submissions: SubmissionData[];
+  regulations?: RegulationDocument[];
+  activeMenu?: ActiveMenuKey;
+  onSelectMenu?: (menu: ActiveMenuKey) => void;
 }
+
+const MONTH_NAMES_ID = [
+  { value: "01", label: "Januari" },
+  { value: "02", label: "Februari" },
+  { value: "03", label: "Maret" },
+  { value: "04", label: "April" },
+  { value: "05", label: "Mei" },
+  { value: "06", label: "Juni" },
+  { value: "07", label: "Juli" },
+  { value: "08", label: "Agustus" },
+  { value: "09", label: "September" },
+  { value: "10", label: "Oktober" },
+  { value: "11", label: "November" },
+  { value: "12", label: "Desember" },
+];
+
+// Helper to parse diverse submittedAt string formats (e.g. "24/09/2026 09:45 WIB", "29 Sep 2026, 09.35 WIB", "2026-09-24") into "YYYY-MM-DD"
+const parseSubmittedDateToYMD = (dateStr: string): string | null => {
+  if (!dateStr) return null;
+  const str = dateStr.trim();
+
+  // Pattern 1: ISO format YYYY-MM-DD
+  const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    const y = isoMatch[1];
+    const m = isoMatch[2].padStart(2, "0");
+    const d = isoMatch[3].padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  // Pattern 2: DD/MM/YYYY or DD-MM-YYYY (e.g. 24/09/2026)
+  const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (slashMatch) {
+    const d = slashMatch[1].padStart(2, "0");
+    const m = slashMatch[2].padStart(2, "0");
+    const y = slashMatch[3];
+    return `${y}-${m}-${d}`;
+  }
+
+  // Pattern 3: Text month in Indonesian/English (e.g. "29 Sep 2026", "29 September 2026")
+  const textMonthMap: Record<string, string> = {
+    jan: "01",
+    januari: "01",
+    january: "01",
+    feb: "02",
+    februari: "02",
+    february: "02",
+    mar: "03",
+    maret: "03",
+    march: "03",
+    apr: "04",
+    april: "04",
+    mei: "05",
+    may: "05",
+    jun: "06",
+    juni: "06",
+    june: "06",
+    jul: "07",
+    juli: "07",
+    july: "07",
+    agu: "08",
+    ags: "08",
+    agustus: "08",
+    aug: "08",
+    august: "08",
+    sep: "09",
+    sept: "09",
+    september: "09",
+    okt: "10",
+    oktober: "10",
+    oct: "10",
+    october: "10",
+    nov: "11",
+    november: "11",
+    des: "12",
+    desember: "12",
+    dec: "12",
+    december: "12",
+  };
+
+  const textMatch = str.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  if (textMatch) {
+    const d = textMatch[1].padStart(2, "0");
+    const monthKey = textMatch[2].toLowerCase();
+    const m = textMonthMap[monthKey] || "01";
+    const y = textMatch[3];
+    return `${y}-${m}-${d}`;
+  }
+
+  // Fallback: Date parse
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  return null;
+};
 
 export const SatkerView: React.FC<SatkerViewProps> = ({
   currentUser,
   onAddSubmission,
-  submissions
+  onUpdateSubmission,
+  onDeleteSubmission,
+  submissions,
+  regulations = [],
+  activeMenu = "satker_list",
+  onSelectMenu,
 }) => {
-  // Cascading Dropdown States
+  const activeRegulations = regulations.filter((r) => r.isActive);
+
+  // Sub Tab state for Daftar RAB vs Form Pengajuan vs Detail Evaluasi & Reupload
+  const [activeRabSubTab, setActiveRabSubTab] = useState<"list" | "form" | "detail">(() => {
+    return activeMenu === "satker_form" ? "form" : "list";
+  });
+
+  // -------------------------------------------------------------
+  // DETAIL EVALUASI AI 20 KRITERIA & REUPLOAD STATES
+  // -------------------------------------------------------------
+  const [reviewDetailSubmission, setReviewDetailSubmission] = useState<SubmissionData | null>(null);
+
+  const handleOpenReviewDetail = (sub: SubmissionData) => {
+    setReviewDetailSubmission(sub);
+    setActiveRabSubTab("detail");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleBackToDaftarRab = () => {
+    setReviewDetailSubmission(null);
+    setActiveRabSubTab("list");
+    onSelectMenu?.("satker_list");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (activeMenu === "satker_form") {
+      setActiveRabSubTab("form");
+      setReviewDetailSubmission(null);
+    } else if (activeMenu === "satker_list") {
+      setActiveRabSubTab("list");
+      setReviewDetailSubmission(null);
+    } else if (activeMenu === "menu_rab_list") {
+      if (activeRabSubTab !== "detail") {
+        setActiveRabSubTab("list");
+      }
+    }
+  }, [activeMenu]);
+
+  // ---------------------------------------------------------
+  // FORM FILTER PENCARIAN DOKUMEN (5 FIELDS) FOR PEMBAHASAN 2
+  // ---------------------------------------------------------
+  const [filterJenisDokumen, setFilterJenisDokumen] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "Menunggu" | "Diterima" | "Ditolak">("all");
+  const [filterTahun, setFilterTahun] = useState<string>("all");
+  const [filterStartDate, setFilterStartDate] = useState<string>("");
+  const [filterEndDate, setFilterEndDate] = useState<string>("");
+
+  const [appliedFilters, setAppliedFilters] = useState({
+    jenisDokumen: "",
+    status: "all" as "all" | "Menunggu" | "Diterima" | "Ditolak",
+    tahun: "all",
+    startDate: "",
+    endDate: "",
+  });
+
+  const handleApplyFilter = () => {
+    setAppliedFilters({
+      jenisDokumen: filterJenisDokumen,
+      status: filterStatus,
+      tahun: filterTahun,
+      startDate: filterStartDate,
+      endDate: filterEndDate,
+    });
+  };
+
+  const handleResetFilter = () => {
+    setFilterJenisDokumen("");
+    setFilterStatus("all");
+    setFilterTahun("all");
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setAppliedFilters({
+      jenisDokumen: "",
+      status: "all",
+      tahun: "all",
+      startDate: "",
+      endDate: "",
+    });
+  };
+
+  // Minimize States
+  const [isPembahasan1Collapsed, setIsPembahasan1Collapsed] = useState(false);
+  const [isPembahasan2Collapsed, setIsPembahasan2Collapsed] = useState(false);
+  const [isUnifiedFormCollapsed, setIsUnifiedFormCollapsed] = useState(false);
+  const [isResultsCollapsed, setIsResultsCollapsed] = useState(false);
+
+  // Modals for Daftar RAB
+  const [selectedDetailSubmission, setSelectedDetailSubmission] = useState<SubmissionData | null>(null);
+  const [historyPreviewItem, setHistoryPreviewItem] = useState<SubmissionData | null>(null);
+  const [historyPrintItem, setHistoryPrintItem] = useState<{
+    submission: SubmissionData;
+    reportType: "ai-result" | "verified-report";
+  } | null>(null);
+
+  // CRUD Modals: Edit & Delete & User Log History
+  const [editItem, setEditItem] = useState<SubmissionData | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<SubmissionData | null>(null);
+  const [historyLogItem, setHistoryLogItem] = useState<SubmissionData | null>(null);
+
+  // Edit form state
+  const [editFileName, setEditFileName] = useState("");
+  const [editKategori, setEditKategori] = useState("Kategori 1");
+  const [editDeskripsi, setEditDeskripsi] = useState("");
+  const [editTahunAnggaran, setEditTahunAnggaran] = useState("2026");
+
+  const handleOpenEdit = (sub: SubmissionData) => {
+    setEditItem(sub);
+    setEditFileName(sub.rabFileName);
+    setEditKategori(sub.kategori || sub.kategori1 || "Kategori 1");
+    setEditDeskripsi(sub.deskripsi || "");
+    setEditTahunAnggaran(sub.tahunAnggaran || "2026");
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editItem) return;
+
+    const userLabel = `${currentUser.name} (${currentUser.id})`;
+    const timeNow = new Date().toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) + " WIB";
+    const existingAudit = editItem.auditTrail || [];
+
+    const updatedSub: SubmissionData = {
+      ...editItem,
+      rabFileName: editFileName.trim() || editItem.rabFileName,
+      kategori: editKategori,
+      kategori1: editKategori,
+      deskripsi: editDeskripsi.trim(),
+      tahunAnggaran: editTahunAnggaran,
+      updatedBy: userLabel,
+      auditTrail: [
+        ...existingAudit,
+        {
+          action: "UPDATE",
+          performedBy: userLabel,
+          timestamp: timeNow,
+          details: `Pembaruan metadata berkas PDF & kategori (${editFileName.trim()})`,
+        },
+      ],
+    };
+
+    if (onUpdateSubmission) {
+      onUpdateSubmission(updatedSub);
+    }
+    setEditItem(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteCandidate) return;
+    if (onDeleteSubmission) {
+      onDeleteSubmission(deleteCandidate.id);
+    }
+    setDeleteCandidate(null);
+  };
+
+  // ---------------------------------------------------------
+  // FORM PENGAJUAN RAB BARU STATES
+  // ---------------------------------------------------------
   const [programs, setPrograms] = useState<string[]>([]);
-  const [selectedProgram, setSelectedProgram] = useState<string>('');
+  const [selectedProgram, setSelectedProgram] = useState<string>("");
 
   const [kegiatans, setKegiatans] = useState<{ kegiatan: string; unitEselon1: string }[]>([]);
-  const [selectedKegiatan, setSelectedKegiatan] = useState<string>('');
+  const [selectedKegiatan, setSelectedKegiatan] = useState<string>("");
 
   const [kros, setKros] = useState<{ kro: string; unitEselon2: string; prioritas: string }[]>([]);
-  const [selectedKro, setSelectedKro] = useState<string>('');
+  const [selectedKro, setSelectedKro] = useState<string>("");
 
   const [ros, setRos] = useState<string[]>([]);
-  const [selectedRo, setSelectedRo] = useState<string>('');
+  const [selectedRo, setSelectedRo] = useState<string>("");
 
-  // Info details from hierarchy
-  const [currentUnitEselon1, setCurrentUnitEselon1] = useState<string>('');
-  const [currentUnitEselon2, setCurrentUnitEselon2] = useState<string>('');
-  const [currentPrioritas, setCurrentPrioritas] = useState<string>('');
+  // e. Tahun Anggaran
+  const [selectedTahunAnggaran, setSelectedTahunAnggaran] = useState<string>("2026");
 
-  // File Upload State: RAB ONLY (Requirement 2)
+  const [currentUnitEselon1, setCurrentUnitEselon1] = useState<string>("");
+  const [currentUnitEselon2, setCurrentUnitEselon2] = useState<string>("");
+  const [currentPrioritas, setCurrentPrioritas] = useState<string>("");
+
+  // Klasifikasi Kategori (Dropdown: Kategori 1, Kategori 2, Kategori 3) & Deskripsi (Kolom Teks)
+  const [formKategori, setFormKategori] = useState<string>("Kategori 1");
+  const [formDeskripsi, setFormDeskripsi] = useState<string>("");
+
+  // File Upload State: RAB PDF ONLY
   const [rabFile, setRabFile] = useState<File | null>(null);
-  const [rabFileName, setRabFileName] = useState<string>('RAB_Rincian_Biaya_2026.pdf');
+  const [rabFileName, setRabFileName] = useState<string>("");
   const [rabDataUrl, setRabDataUrl] = useState<string | undefined>(undefined);
+  const [rabBlobUrl, setRabBlobUrl] = useState<string | undefined>(undefined);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Preview Modal States
+  // Live Form Preview Modal
   const [previewOpen, setPreviewOpen] = useState(false);
 
   // AI Loading & Result States
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisProgressText, setAnalysisProgressText] = useState('');
+  const [analysisProgressText, setAnalysisProgressText] = useState("");
   const [currentSubmission, setCurrentSubmission] = useState<SubmissionData | null>(null);
-
-  // Printable Report Modal
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // Post-submit Trigger State (Daftar Dokumen Acuan Terkait)
+  const [showReferenceDocsTrigger, setShowReferenceDocsTrigger] = useState(false);
 
   // Init Programs
   useEffect(() => {
     const list = getUniquePrograms();
     setPrograms(list);
-    if (list.length > 0) {
-      setSelectedProgram(list[0]);
-    }
   }, []);
 
-  // When Program changes, update Kegiatans
+  // Cascading Kegiatans
   useEffect(() => {
     if (!selectedProgram) {
       setKegiatans([]);
-      setSelectedKegiatan('');
+      setSelectedKegiatan("");
+      setCurrentUnitEselon1("");
       return;
     }
     const kList = getKegiatansForProgram(selectedProgram);
     setKegiatans(kList);
-    if (kList.length > 0) {
-      setSelectedKegiatan(kList[0].kegiatan);
-      setCurrentUnitEselon1(kList[0].unitEselon1);
-    } else {
-      setSelectedKegiatan('');
-      setCurrentUnitEselon1('');
-    }
+    setSelectedKegiatan("");
+    setCurrentUnitEselon1("");
   }, [selectedProgram]);
 
-  // When Kegiatan changes, update KROs
+  // Cascading KROs
   useEffect(() => {
     if (!selectedProgram || !selectedKegiatan) {
       setKros([]);
-      setSelectedKro('');
+      setSelectedKro("");
+      setCurrentUnitEselon2("");
+      setCurrentPrioritas("");
       return;
     }
     const kroList = getKrosForKegiatan(selectedProgram, selectedKegiatan);
     setKros(kroList);
-    if (kroList.length > 0) {
-      setSelectedKro(kroList[0].kro);
-      setCurrentUnitEselon2(kroList[0].unitEselon2);
-      setCurrentPrioritas(kroList[0].prioritas);
-    } else {
-      setSelectedKro('');
-      setCurrentUnitEselon2('');
-      setCurrentPrioritas('');
-    }
+    setSelectedKro("");
+    setCurrentUnitEselon2("");
+    setCurrentPrioritas("");
   }, [selectedProgram, selectedKegiatan]);
 
-  // When KRO changes, update ROs
+  // Cascading ROs
   useEffect(() => {
     if (!selectedProgram || !selectedKegiatan || !selectedKro) {
       setRos([]);
-      setSelectedRo('');
+      setSelectedRo("");
       return;
     }
     const roList = getRosForKro(selectedProgram, selectedKegiatan, selectedKro);
     setRos(roList);
-    if (roList.length > 0) {
-      setSelectedRo(roList[0]);
-    } else {
-      setSelectedRo('');
-    }
+    setSelectedRo("");
 
-    // Update prioritas & unit eselon 2 if available
-    const match = HIERARCHY_DATA.find(
-      h => h.program === selectedProgram && h.kegiatan === selectedKegiatan && h.kro === selectedKro
-    );
+    const match = HIERARCHY_DATA.find((h) => h.program === selectedProgram && h.kegiatan === selectedKegiatan && h.kro === selectedKro);
     if (match) {
+      setCurrentUnitEselon1(match.unitEselon1);
       setCurrentUnitEselon2(match.unitEselon2);
       setCurrentPrioritas(match.prioritasCheck);
     }
   }, [selectedProgram, selectedKegiatan, selectedKro]);
 
-  // Handle RAB file upload
+  // Direct file processor
+  const handleDirectFileUpload = (file: File) => {
+    setRabFile(file);
+    setRabFileName(file.name);
+    setUploadError(null);
+
+    if (rabBlobUrl && rabBlobUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(rabBlobUrl);
+    }
+    const blobUrl = URL.createObjectURL(file);
+    setRabBlobUrl(blobUrl);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setRabDataUrl(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    storePdfBlob(`temp_${file.name}`, file);
+    storePdfBlob(file.name, file);
+  };
+
   const handleRabUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setRabFile(file);
-      setRabFileName(file.name);
-      const url = URL.createObjectURL(file);
-      setRabDataUrl(url);
+      handleDirectFileUpload(file);
     }
   };
 
-  // Requirement: "tombol hapus"
+  // Reset Formulir (Only available when rabFile !== null)
   const handleResetForm = () => {
-    if (programs.length > 0) setSelectedProgram(programs[0]);
+    setSelectedProgram("");
+    setSelectedKegiatan("");
+    setSelectedKro("");
+    setSelectedRo("");
+    setSelectedTahunAnggaran("2026");
+    setCurrentUnitEselon1("");
+    setCurrentUnitEselon2("");
+    setCurrentPrioritas("");
+    setFormKategori("Kategori 1");
+    setFormDeskripsi("");
+
+    if (rabBlobUrl && rabBlobUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(rabBlobUrl);
+    }
+    setRabBlobUrl(undefined);
     setRabFile(null);
-    setRabFileName('RAB_Rincian_Biaya_2026.pdf');
+    setRabFileName("");
     setRabDataUrl(undefined);
     setCurrentSubmission(null);
+    setShowReferenceDocsTrigger(false);
+    setUploadError(null);
   };
 
-  // Requirement: Submit RAB to AI Engine
-  const handleAiSubmit = () => {
+  // Handler untuk memulai revisi dokumen dari Riwayat
+  const handleStartRevision = (sub: SubmissionData) => {
+    setSelectedProgram(sub.program);
+    const kList = getKegiatansForProgram(sub.program);
+    setKegiatans(kList);
+    setSelectedKegiatan(sub.kegiatan);
+    const kroList = getKrosForKegiatan(sub.program, sub.kegiatan);
+    setKros(kroList);
+    setSelectedKro(sub.kro);
+    const roList = getRosForKro(sub.program, sub.kegiatan, sub.kro);
+    setRos(roList);
+    setSelectedRo(sub.ro);
+    setSelectedTahunAnggaran(sub.tahunAnggaran || "2026");
+    setCurrentUnitEselon1(sub.unitEselon1);
+    setCurrentUnitEselon2(sub.unitEselon2);
+    setCurrentPrioritas(sub.prioritas);
+    setFormKategori(sub.kategori || sub.kategori1 || "Kategori 1");
+    setFormDeskripsi(sub.deskripsi || "");
+
+    setSelectedDetailSubmission(null);
+    if (onSelectMenu) {
+      onSelectMenu("satker_form");
+    }
+
+    setTimeout(() => {
+      document.getElementById("rab-file-upload-input")?.parentElement?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 200);
+  };
+
+  // Relevant submissions for stats & table
+  const relevantSubmissions = submissions;
+
+  const waitingCount = relevantSubmissions.filter((s) => s.verificationStatus === "Menunggu").length;
+  const acceptedCount = relevantSubmissions.filter((s) => s.verificationStatus === "Diterima").length;
+  const rejectedCount = relevantSubmissions.filter((s) => s.verificationStatus === "Ditolak").length;
+
+  // Filtered submissions based on 5-field filter form
+  const filteredSubmissions = relevantSubmissions.filter((sub) => {
+    // 1. Jenis Dokumen (Teks)
+    if (appliedFilters.jenisDokumen.trim()) {
+      const q = appliedFilters.jenisDokumen.toLowerCase().trim();
+      const matchName = sub.rabFileName.toLowerCase().includes(q);
+      const matchKat = (sub.kategori || sub.kategori1 || "").toLowerCase().includes(q);
+      const matchDesk = (sub.deskripsi || "").toLowerCase().includes(q);
+      const matchKat2 = (sub.kategori2 || "").toLowerCase().includes(q);
+      const matchKat3 = (sub.kategori3 || "").toLowerCase().includes(q);
+      const matchProg = sub.program.toLowerCase().includes(q);
+      const matchKeg = sub.kegiatan.toLowerCase().includes(q);
+      if (!matchName && !matchKat && !matchDesk && !matchKat2 && !matchKat3 && !matchProg && !matchKeg) {
+        return false;
+      }
+    }
+
+    // 2. Status (Dropdown)
+    if (appliedFilters.status !== "all") {
+      if (sub.verificationStatus !== appliedFilters.status) {
+        return false;
+      }
+    }
+
+    // 3. Tahun Anggaran (Dropdown/Number)
+    if (appliedFilters.tahun !== "all") {
+      const matchesYear = sub.tahunAnggaran === appliedFilters.tahun || sub.submittedAt.includes(appliedFilters.tahun) || sub.ticketNumber.includes(appliedFilters.tahun);
+      if (!matchesYear) {
+        return false;
+      }
+    }
+
+    // 4. Rentang Tanggal Pengajuan (Mulai - Akhir)
+    if (appliedFilters.startDate || appliedFilters.endDate) {
+      const subYmd = parseSubmittedDateToYMD(sub.submittedAt);
+      if (subYmd) {
+        if (appliedFilters.startDate && subYmd < appliedFilters.startDate) {
+          return false;
+        }
+        if (appliedFilters.endDate && subYmd > appliedFilters.endDate) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  });
+
+  // Submit RAB to AI Engine
+  const handleAiSubmit = async () => {
+    if (!selectedProgram || !selectedKegiatan || !selectedKro || !selectedRo || !selectedTahunAnggaran) {
+      setUploadError("Harap lengkapi seluruh pilihan hierarki anggaran (Program, Kegiatan, KRO, RO, dan Tahun Anggaran) sebelum mengajukan telaah AI.");
+      return;
+    }
+    if (!rabFile) {
+      setUploadError("Wajib mengunggah berkas dokumen PDF RAB sebelum mengajukan telaah AI.");
+      return;
+    }
+    setUploadError(null);
     setIsAnalyzing(true);
-    setAnalysisProgressText('Mengunggah dokumen PDF RAB ke AI Engine...');
+    const regLabel = activeRegulations.length > 0 ? activeRegulations.map((r) => r.title).join(" & ") : "PMK Standar Biaya Masukan (SBM)";
 
-    setTimeout(() => {
-      setAnalysisProgressText('Mengekstraksi Bagan Akun Standar (BAS) & Komponen Biaya...');
-    }, 700);
+    setAnalysisProgressText(`Membaca berkas PDF "${rabFileName}"...`);
+    await new Promise((r) => setTimeout(r, 350));
+    setAnalysisProgressText(`Mengekstraksi konten tabel biaya, kode BAS, dan pagu dari "${rabFileName}"...`);
+    await new Promise((r) => setTimeout(r, 450));
+    setAnalysisProgressText(`Memvalidasi kepatuhan 20 Kriteria Wajib terhadap ${activeRegulations[0]?.title || "PMK SBM"}...`);
+    await new Promise((r) => setTimeout(r, 550));
+    setAnalysisProgressText(`Menghasilkan laporan telaah cerdas dokumen "${rabFileName}"...`);
 
-    setTimeout(() => {
-      setAnalysisProgressText('Memverifikasi 20 Kriteria Wajib Dokumen RAB & Kepatuhan SBM...');
-    }, 1500);
+    let analysis: any = null;
 
-    setTimeout(() => {
-      setAnalysisProgressText('Memeriksa kalkulasi matematis volume x harga dan perpajakan...');
-    }, 2200);
+    if (rabFile) {
+      try {
+        const formData = new FormData();
+        formData.append("rab_file", rabFile);
+        formData.append("program", selectedProgram);
+        formData.append("kegiatan", selectedKegiatan);
+        formData.append("kro", selectedKro);
+        formData.append("ro", selectedRo);
+        formData.append("tahun_anggaran", selectedTahunAnggaran);
+        formData.append("unit_eselon1", currentUnitEselon1 || "Direktorat Jenderal Komunikasi Publik dan Media");
+        formData.append("unit_eselon2", currentUnitEselon2 || "Direktorat Informasi Publik");
+        formData.append("prioritas", currentPrioritas || "Prioritas Nasional");
+        formData.append("satker_user_id", currentUser.id);
 
-    setTimeout(() => {
-      const analysis = runAiRabAnalysis(
-        selectedProgram,
-        selectedKegiatan,
-        selectedKro,
-        selectedRo,
-        rabFileName
-      );
+        const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/+$/, "") || "http://localhost:8000";
+        const resp = await fetch(`${apiBaseUrl}/api/submissions/upload-and-check`, {
+          method: "POST",
+          body: formData,
+        });
 
-      const newSubmission: SubmissionData = {
-        id: `SUB-${Date.now()}`,
-        ticketNumber: `RAB/KOMDIGI/${new Date().getFullYear()}/${Math.floor(100 + Math.random() * 900)}`,
-        satkerUserId: currentUser.id,
-        satkerUserName: currentUser.name,
-        satkerUnit: currentUser.unit,
-        submittedAt: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) + ' WIB',
-        program: selectedProgram,
-        kegiatan: selectedKegiatan,
-        kro: selectedKro,
-        ro: selectedRo,
-        unitEselon1: currentUnitEselon1 || 'Direktorat Jenderal Komunikasi Publik dan Media',
-        unitEselon2: currentUnitEselon2 || 'Direktorat Informasi Publik',
-        prioritas: currentPrioritas || 'Prioritas Nasional',
-        rabFileName: rabFileName,
-        rabFileSize: rabFile ? `${(rabFile.size / (1024 * 1024)).toFixed(1)} MB` : '1.8 MB',
-        pdfDataUrl: rabDataUrl,
-        aiStatus: analysis.aiStatus,
-        aiScore: analysis.aiScore,
-        aiReason: analysis.aiReason,
-        aiRecommendation: analysis.aiRecommendation,
-        criteriaResults: analysis.criteriaResults,
-        verificationStatus: 'Menunggu',
-        verifikatorNotes: ''
-      };
+        if (resp.ok) {
+          const data = await resp.json();
+          let cResults = data.ai_criteria_results;
+          if (typeof cResults === "string") {
+            try {
+              cResults = JSON.parse(cResults);
+            } catch {
+              cResults = null;
+            }
+          }
+          if (Array.isArray(cResults) && cResults.length > 0) {
+            analysis = {
+              aiStatus: data.ai_status,
+              aiScore: data.ai_score,
+              aiReason: data.ai_reason,
+              aiRecommendation: data.ai_recommendation,
+              criteriaResults: cResults,
+              activeRegulationTitle: data.activeRegulationTitle || regLabel,
+              ticketNumber: data.ticket_number,
+            };
+          }
+        }
+      } catch (e) {
+        console.info("Backend API belum aktif, beralih ke inspeksi dokumen cerdas langsung dari berkas...");
+      }
+    }
 
-      setCurrentSubmission(newSubmission);
+    if (!analysis) {
+      try {
+        analysis = await inspectUploadedRabDocument(
+          rabFile,
+          rabFileName,
+          rabFile ? `${(rabFile.size / (1024 * 1024)).toFixed(1)} MB` : "1.8 MB",
+          selectedProgram,
+          selectedKegiatan,
+          selectedKro,
+          selectedRo,
+          regulations,
+        );
+      } catch (err) {
+        console.warn("inspectUploadedRabDocument error, fallback to runAiRabAnalysis:", err);
+        analysis = runAiRabAnalysis(selectedProgram, selectedKegiatan, selectedKro, selectedRo, rabFileName, regulations);
+      }
+    }
+
+    let finalCriteria = Array.isArray(analysis?.criteriaResults) ? analysis.criteriaResults : [];
+    if (finalCriteria.length === 0) {
+      const fallbackAnalysis = runAiRabAnalysis(selectedProgram, selectedKegiatan, selectedKro, selectedRo, rabFileName, regulations);
+      finalCriteria = fallbackAnalysis.criteriaResults;
+      if (!analysis) {
+        analysis = fallbackAnalysis;
+      }
+    }
+
+    const nowFormatted = new Date().toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) + " WIB";
+    const userLabel = `${currentUser.name} (${currentUser.id})`;
+
+    // Generate related reference documents for post-submit trigger
+    const refDocs = [
+      activeRegulations[0]?.title || "Peraturan Menteri Keuangan No. 49/PMK.02/2023 tentang Standar Biaya Masukan TA 2026",
+      "Petunjuk Teknis Penyusunan Dokumen RKA-K/L dan Rincian Anggaran Biaya Kementerian Komunikasi dan Digital RI",
+      "Bagan Akun Standar (BAS) 6 Digit Belanja Operasional & Non-Operasional Perbendaharaan RI",
+      "Panduan Batas Tarif Standar Honorarium & Perjalanan Dinas Dalam Negeri",
+    ];
+
+    const newSubmission: SubmissionData = {
+      id: `SUB-${Date.now()}`,
+      ticketNumber: analysis?.ticketNumber || `RAB/KOMDIGI/${selectedTahunAnggaran || new Date().getFullYear()}/${Math.floor(100 + Math.random() * 900)}`,
+      satkerUserId: currentUser.id,
+      satkerUserName: currentUser.name,
+      satkerUnit: currentUser.unit,
+      submittedAt: nowFormatted,
+      program: selectedProgram,
+      kegiatan: selectedKegiatan,
+      kro: selectedKro,
+      ro: selectedRo,
+      tahunAnggaran: selectedTahunAnggaran || "2026",
+      unitEselon1: currentUnitEselon1 || "Direktorat Jenderal Komunikasi Publik dan Media",
+      unitEselon2: currentUnitEselon2 || "Direktorat Informasi Publik",
+      prioritas: currentPrioritas || "Prioritas Nasional",
+      rabFileName: rabFileName,
+      rabFileSize: rabFile ? `${(rabFile.size / (1024 * 1024)).toFixed(1)} MB` : "1.8 MB",
+      pdfDataUrl: rabBlobUrl || rabDataUrl,
+      activeRegulationTitle: analysis?.activeRegulationTitle || regLabel,
+
+      // Klasifikasi Kategori (Dropdown) & Deskripsi (Teks)
+      kategori: formKategori || "Kategori 1",
+      deskripsi: formDeskripsi.trim(),
+      kategori1: formKategori || "Kategori 1",
+      kategori2: "",
+      kategori3: "",
+
+      // User Logging Metadata
+      createdBy: userLabel,
+      updatedBy: userLabel,
+      auditTrail: [
+        {
+          action: "CREATE",
+          performedBy: userLabel,
+          timestamp: nowFormatted,
+          details: `Pendaftaran berkas RAB PDF: ${rabFileName}`,
+        },
+      ],
+
+      // Related Reference Documents Trigger
+      referenceDocuments: refDocs,
+
+      aiStatus: analysis?.aiStatus || "LOLOS",
+      aiScore: typeof analysis?.aiScore === "number" ? analysis.aiScore : 100,
+      aiReason: analysis?.aiReason || "Penelaahan dokumen RAB berhasil diselesaikan.",
+      aiRecommendation: analysis?.aiRecommendation || "Patuhi seluruh standar biaya SBM yang berlaku.",
+      criteriaResults: finalCriteria,
+      verificationStatus: "Menunggu",
+      verifikatorNotes: "",
+    };
+
+    setCurrentSubmission(newSubmission);
+    setShowReferenceDocsTrigger(true);
+    setIsResultsCollapsed(false);
+    setIsAnalyzing(false);
+
+    if (rabFile) {
+      storePdfBlob(newSubmission.id, rabFile);
+      storePdfBlob(newSubmission.ticketNumber, rabFile);
+      storePdfBlob(newSubmission.rabFileName, rabFile);
+    }
+
+    try {
       onAddSubmission(newSubmission);
-      setIsAnalyzing(false);
-    }, 2900);
+    } catch (e) {
+      console.warn("Could not save to parent submission list:", e);
+    }
+
+    setTimeout(() => {
+      document.getElementById("post-submit-reference-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
   };
 
   return (
-    <div className="space-y-8">
-      {/* Top Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-white shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-400 mb-1">
-              <Layers className="w-4 h-4" />
-              <span>Portal Satuan Kerja (SatKer) Pengusul</span>
-            </div>
-            <h2 className="text-xl font-bold tracking-tight">Pengajuan Telaah Dokumen RAB Mandiri</h2>
-            <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-              Pilih hierarki anggaran RKA-K/L (Program, Kegiatan, KRO, RO) dari basis data referensi, unggah berkas PDF Rincian Anggaran Biaya (RAB), lakukan pratinjau dokumen, dan jalankan penapisan otomatis AI.
-            </p>
-          </div>
-
-          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-right">
-            <span className="text-slate-400 block text-[10px]">Satker Pengusul:</span>
-            <span className="font-semibold text-white block">{currentUser.name}</span>
-            <span className="text-slate-400 text-[10px] font-mono">ID (8 Digit): {currentUser.id}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Input Card: Cascading Dropdowns + RAB PDF Upload */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-6">
-        <div className="border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            1. Form Pengisian Hierarki Anggaran (Dari Data Excel / CSV)
-          </h3>
-          <span className="text-[11px] text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full font-medium">
-            Cascading Dropdown Otomatis
-          </span>
-        </div>
-
-        {/* 4 Cascading Dropdowns */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* a. Program */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              a. Program <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <select
-                id="select-program"
-                value={selectedProgram}
-                onChange={(e) => setSelectedProgram(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 dark:text-white appearance-none pr-8 font-medium"
-              >
-                {programs.map((prog) => (
-                  <option key={prog} value={prog}>
-                    {prog}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* b. Kegiatan */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              b. Kegiatan (Menyesuaikan Program Terpilih) <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <select
-                id="select-kegiatan"
-                value={selectedKegiatan}
-                onChange={(e) => setSelectedKegiatan(e.target.value)}
-                disabled={kegiatans.length === 0}
-                className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 dark:text-white appearance-none pr-8 font-medium disabled:opacity-50"
-              >
-                {kegiatans.map((item) => (
-                  <option key={item.kegiatan} value={item.kegiatan}>
-                    {item.kegiatan}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* c. KRO */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              c. Klasifikasi Rincian Output (KRO) (Menyesuaikan Kegiatan) <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <select
-                id="select-kro"
-                value={selectedKro}
-                onChange={(e) => setSelectedKro(e.target.value)}
-                disabled={kros.length === 0}
-                className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 dark:text-white appearance-none pr-8 font-medium disabled:opacity-50"
-              >
-                {kros.map((item) => (
-                  <option key={item.kro} value={item.kro}>
-                    {item.kro}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* d. RO */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              d. Rincian Output (RO) (Menyesuaikan KRO) <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <select
-                id="select-ro"
-                value={selectedRo}
-                onChange={(e) => setSelectedRo(e.target.value)}
-                disabled={ros.length === 0}
-                className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 dark:text-white appearance-none pr-8 font-medium disabled:opacity-50"
-              >
-                {ros.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-        </div>
-
-        {/* Info Box: Automatically inferred from CSV hierarchy */}
-        {(currentUnitEselon1 || currentUnitEselon2 || currentPrioritas) && (
-          <div className="p-3.5 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/50 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+    <div className="space-y-10 sm:space-y-12">
+      {/* Top Banner - Hanya muncul pada sub-tab list */}
+      {activeRabSubTab === "list" && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 sm:p-8 text-slate-900 dark:text-slate-100 shadow-sm transition-colors">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
-              <span className="text-[10px] text-blue-700 dark:text-blue-300 font-semibold uppercase block">Unit Eselon I:</span>
-              <span className="text-slate-800 dark:text-slate-200 font-medium truncate block">{currentUnitEselon1 || '-'}</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-blue-700 dark:text-blue-300 font-semibold uppercase block">Unit Eselon II:</span>
-              <span className="text-slate-800 dark:text-slate-200 font-medium truncate block">{currentUnitEselon2 || '-'}</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-blue-700 dark:text-blue-300 font-semibold uppercase block">Kategori Prioritas:</span>
-              <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold mt-0.5 ${
-                currentPrioritas === 'Prioritas Nasional'
-                  ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-800'
-                  : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'
-              }`}>
-                {currentPrioritas || 'Bukan Prioritas Nasional'}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Section 2: PDF Upload & Preview Modal Trigger: RAB ONLY (Requirement 2) */}
-        <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
-              <Upload className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              2. Kolom Input File Dokumen PDF RAB (Rincian Anggaran Biaya)
-            </h3>
-            <span className="text-[11px] text-slate-500 font-medium">Format berkas: .pdf</span>
-          </div>
-
-          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-5 bg-slate-50/70 dark:bg-slate-950/50 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 w-full md:w-auto">
-              <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                <FileSpreadsheet className="w-6 h-6" />
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 mb-1.5">
+                <Layers className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                <span>Portal Satuan Kerja (Satker)</span>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                    {rabFileName}
-                  </span>
-                  <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px] rounded font-mono font-semibold">
-                    RAB PDF
-                  </span>
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Daftar Dokumen RAB &amp; Riwayat Pengajuan</h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 max-w-2xl leading-relaxed">
+                Pantau status verifikasi dokumen RAB, filter berdasarkan jenis dokumen, status, tahun anggaran dan bulan, serta kelola tindakan CRUD berkas.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs text-right shadow-2xs shrink-0">
+              <span className="text-slate-400 dark:text-slate-500 block text-[10px] font-semibold uppercase tracking-wider">Satker Pengusul:</span>
+              <span className="font-bold text-slate-900 dark:text-white block text-sm mt-0.5">{currentUser.name}</span>
+              <span className="text-slate-500 dark:text-slate-400 text-xs font-mono mt-0.5 block">ID (8 Digit): {currentUser.id}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header Bar indicating Active Sub-view from Sidebar with Status Counters - Hanya muncul pada sub-tab list */}
+      {activeRabSubTab === "list" && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/80 text-xs font-bold shadow-2xs">
+              <FileSpreadsheet className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+              <span>Sub Menu: Daftar &amp; Riwayat Dokumen RAB ({submissions.length} Berkas)</span>
+            </div>
+          </div>
+
+          {/* Quick status counters */}
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-3">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              Menunggu: <strong>{waitingCount}</strong>
+            </span>
+            <span className="text-slate-300 dark:text-slate-700">|</span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              Diterima: <strong>{acceptedCount}</strong>
+            </span>
+            <span className="text-slate-300 dark:text-slate-700">|</span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+              Ditolak: <strong>{rejectedCount}</strong>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* 1. VIEW SUB-TAB: DAFTAR & RIWAYAT RAB */}
+      {/* ================================================================== */}
+      {activeRabSubTab === "list" && (
+        <div className="space-y-10 sm:space-y-12 animate-fadeIn">
+          {/* SECTION 1: PEMBAHASAN 1 • RINGKASAN STATUS VERIFIKASI BERKAS PDF (TETAP SAMA) */}
+          <div className="relative bg-white dark:bg-slate-900 border-2 border-cyan-500 dark:border-cyan-500 rounded-2xl p-6 sm:p-8 pt-8 sm:pt-9 shadow-sm space-y-6 sm:space-y-7 transition-all">
+            {/* Outline Label Badge */}
+            <div className="absolute -top-3.5 left-5 sm:left-6 z-10 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider shadow-sm border bg-cyan-600 text-white border-cyan-400 select-none">
+              <FileCheck className="w-3.5 h-3.5" />
+              <span>PEMBAHASAN 1 &bull; RINGKASAN STATUS VERIFIKASI BERKAS PDF</span>
+            </div>
+
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
+                  <FileCheck className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                  <span>1. Ringkasan Status Verifikasi Berkas Dokumen PDF RAB</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Statistik keseluruhan dokumen RAB yang diajukan beserta status kelolosan telaah verifikator</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsPembahasan1Collapsed(!isPembahasan1Collapsed)}
+                className="h-8 px-3 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
+                title={isPembahasan1Collapsed ? "Perluas Pembahasan 1" : "Minimize Pembahasan 1"}
+              >
+                <span>{isPembahasan1Collapsed ? "Perluas" : "Minimize"}</span>
+                {isPembahasan1Collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {!isPembahasan1Collapsed && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fadeIn">
+                {/* 1. Total Berkas PDF */}
+                <div className="p-5 rounded-2xl border bg-slate-50/80 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80 shadow-2xs select-none">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Berkas PDF</span>
+                    <FileSpreadsheet className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white mt-2">{relevantSubmissions.length}</div>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 block">Seluruh dokumen yang diinput</span>
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Memuat struktur Bagan Akun Standar (BAS), rincian komponen biaya, volume, harga satuan SBM, dan pengesahan PPK.
+
+                {/* 2. Menunggu Verifikasi */}
+                <div className="p-5 rounded-2xl border bg-slate-50/80 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80 shadow-2xs select-none">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide">Menunggu Verifikasi</span>
+                    <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-2">{waitingCount}</div>
+                  <span className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-1 block">Menunggu proses telaah</span>
+                </div>
+
+                {/* 3. Diterima */}
+                <div className="p-5 rounded-2xl border bg-slate-50/80 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80 shadow-2xs select-none">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">Diterima / Disetujui</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-2">{acceptedCount}</div>
+                  <span className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-1 block">Memenuhi SBM &amp; disahkan DIPA</span>
+                </div>
+
+                {/* 4. Ditolak */}
+                <div className="p-5 rounded-2xl border bg-slate-50/80 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80 shadow-2xs select-none">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wide">Ditolak / Perlu Revisi</span>
+                    <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                  </div>
+                  <div className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-2">{rejectedCount}</div>
+                  <span className="text-[11px] text-rose-700/80 dark:text-rose-400/80 mt-1 block">Perlu perbaikan dari Satker</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 2: PEMBAHASAN 2 • TABEL INFORMASI DOKUMEN PDF & FORM FILTER PENCARIAN DOKUMEN */}
+          <div className="relative bg-white dark:bg-slate-900 border-2 border-blue-500 dark:border-blue-500 rounded-2xl p-6 sm:p-8 pt-8 sm:pt-9 shadow-sm space-y-6 sm:space-y-7 transition-all">
+            {/* Outline Label Badge */}
+            <div className="absolute -top-3.5 left-5 sm:left-6 z-10 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider shadow-sm border bg-blue-600 text-white border-blue-400 select-none">
+              <FileText className="w-3.5 h-3.5" />
+              <span>PEMBAHASAN 2 &bull; TABEL INFORMASI DOKUMEN PDF RAB</span>
+            </div>
+
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>2. Tabel Informasi Dokumen PDF Berdasarkan Status &amp; Aksi CRUD</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Gunakan form filter pencarian, kelola berkas dengan tombol aksi CRUD, dan pantau history pembuat (Create) serta pembaru (Update) berkas.
                 </p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setIsPembahasan2Collapsed(!isPembahasan2Collapsed)}
+                className="h-8 px-3 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold self-start sm:self-auto"
+                title={isPembahasan2Collapsed ? "Perluas Tabel" : "Minimize Tabel"}
+              >
+                <span>{isPembahasan2Collapsed ? "Perluas" : "Minimize"}</span>
+                {isPembahasan2Collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+              </button>
             </div>
 
-            <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0">
-              <label 
-                htmlFor="rab-file-upload-input"
-                className="px-4 py-2 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
-              >
-                Pilih Berkas PDF
-              </label>
-              <input
-                id="rab-file-upload-input"
-                type="file"
-                accept=".pdf"
-                onChange={handleRabUpload}
-                className="hidden"
-              />
+            {!isPembahasan2Collapsed && (
+              <div className="space-y-6 animate-fadeIn">
+                {/* ------------------------------------------------------------- */}
+                {/* FORM FILTER PENCARIAN DOKUMEN (5 FIELD SESUAI INSTRUKSI) */}
+                {/* 1. Jenis Dokumen (Teks) */}
+                {/* 2. Status (Dropdown: Diterima, Menunggu, Ditolak) */}
+                {/* 3. Tahun Anggaran (Dropdown/Number) */}
+                {/* 4. Bulan (Dropdown) */}
+                {/* 5. Button Apply Filter */}
+                {/* ------------------------------------------------------------- */}
+                <div className="p-5 bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 dark:border-slate-700/60">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                      <Filter className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                      <span>Form Filter Pencarian Dokumen RAB</span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">5 Parameter Penapisan</span>
+                  </div>
 
-              {/* Requirement: "Ketika input ada tombol pop up untuk preview pdf yg telah diupload" */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                    {/* 1. Jenis Dokumen (Input Teks) */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                        1. Jenis Dokumen <span className="text-slate-400 font-normal lowercase">(teks)</span>
+                      </label>
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          id="filter-jenis-dokumen"
+                          type="text"
+                          value={filterJenisDokumen}
+                          onChange={(e) => setFilterJenisDokumen(e.target.value)}
+                          placeholder="Cari jenis dokumen / nama berkas..."
+                          className="w-full pl-9 pr-3 h-10 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 shadow-2xs"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. Status (Dropdown: Diterima, Menunggu, Ditolak) */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">2. Status Verifikasi</label>
+                      <select
+                        id="filter-status-dropdown"
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value as any)}
+                        className="w-full h-10 px-3 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium shadow-2xs cursor-pointer"
+                      >
+                        <option value="all">Semua Status Penetapan</option>
+                        <option value="Menunggu">Menunggu</option>
+                        <option value="Diterima">Diterima</option>
+                        <option value="Ditolak">Ditolak</option>
+                      </select>
+                    </div>
+
+                    {/* 3. Tahun Anggaran (Dropdown/Number) */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">3. Tahun Anggaran</label>
+                      <select
+                        id="filter-tahun-dropdown"
+                        value={filterTahun}
+                        onChange={(e) => setFilterTahun(e.target.value)}
+                        className="w-full h-10 px-3 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium shadow-2xs cursor-pointer"
+                      >
+                        <option value="all">Semua Tahun Anggaran</option>
+                        <option value="2026">Tahun Anggaran 2026</option>
+                        <option value="2025">Tahun Anggaran 2025</option>
+                        <option value="2024">Tahun Anggaran 2024</option>
+                      </select>
+                    </div>
+
+                    {/* 4. Tanggal Pengajuan (Kalender Rentang Mulai - Akhir) */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">4. Tanggal Pengajuan (Mulai - Akhir)</label>
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative flex-1">
+                          <input
+                            type="date"
+                            id="filter-date-start"
+                            value={filterStartDate}
+                            onChange={(e) => setFilterStartDate(e.target.value)}
+                            title="Pilih Tanggal Mulai"
+                            aria-label="Tanggal Mulai"
+                            className="w-full h-10 px-2 sm:px-2.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium shadow-2xs cursor-pointer"
+                          />
+                        </div>
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 shrink-0">s/d</span>
+                        <div className="relative flex-1">
+                          <input
+                            type="date"
+                            id="filter-date-end"
+                            value={filterEndDate}
+                            onChange={(e) => setFilterEndDate(e.target.value)}
+                            title="Pilih Tanggal Akhir"
+                            aria-label="Tanggal Akhir"
+                            className="w-full h-10 px-2 sm:px-2.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium shadow-2xs cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Tombol "Apply Filter" & Reset */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      Menampilkan <strong className="text-slate-900 dark:text-white font-bold">{filteredSubmissions.length}</strong> dari {relevantSubmissions.length} dokumen
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleResetFilter}
+                        className="h-10 px-4 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        Reset Filter
+                      </button>
+
+                      {/* 5. BUTTON APPLY FILTER */}
+                      <button
+                        id="btn-apply-filter"
+                        type="button"
+                        onClick={handleApplyFilter}
+                        className="h-10 px-6 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-all cursor-pointer ring-1 ring-cyan-500"
+                      >
+                        <Filter className="w-3.5 h-3.5" />
+                        <span>Apply Filter</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Table of PDF Documents with CRUD actions & User Logging */}
+                <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100/95 dark:bg-slate-800/95 border-b-2 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 uppercase font-black tracking-wider text-xs">
+                        <tr>
+                          <th className="px-4 py-4 w-12 text-center">No</th>
+                          <th className="px-4 py-4 w-44">Kode</th>
+                          <th className="px-4 py-4 w-36">Tanggal</th>
+                          <th className="px-4 py-4">Dokumen PDF RAB &amp; Kategori</th>
+                          <th className="px-4 py-4">Hierarki Anggaran RKA-K/L</th>
+                          <th className="px-4 py-4 w-48">User Logging (Create &amp; Update)</th>
+                          <th className="px-4 py-4 w-28 text-center">Hasil AI</th>
+                          <th className="px-4 py-4 w-44">Status Verifikasi</th>
+                          <th className="px-4 py-4 w-44 text-center">Aksi (CRUD)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {filteredSubmissions.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="text-center py-14 text-slate-400 dark:text-slate-500">
+                              <FileSpreadsheet className="w-9 h-9 mx-auto mb-2.5 opacity-50" />
+                              <p className="font-bold text-xs">Tidak ada dokumen PDF RAB yang sesuai dengan filter.</p>
+                              <p className="text-[11px] mt-1 text-slate-400">Silakan sesuaikan parameter pencarian atau gunakan menu "Form Pengajuan RAB Baru".</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredSubmissions.map((sub, idx) => {
+                            const creator = sub.createdBy || `${sub.satkerUserName} (${sub.satkerUserId})`;
+                            const updater = sub.updatedBy || creator;
+
+                            return (
+                              <tr key={sub.id} className="hover:bg-sky-50/80 dark:hover:bg-slate-800/70 border-b border-slate-100 dark:border-slate-800/80 transition-colors">
+                                {/* 1. No */}
+                                <td className="px-4 py-4 text-center font-mono font-medium text-slate-400">{idx + 1}</td>
+
+                                {/* 2. Kode */}
+                                <td className="px-4 py-4">
+                                  <span className="font-mono font-bold text-cyan-700 dark:text-cyan-400 block text-xs whitespace-nowrap">{sub.ticketNumber}</span>
+                                </td>
+
+                                {/* 3. Tanggal */}
+                                <td className="px-4 py-4">
+                                  <span className="text-xs text-slate-600 dark:text-slate-300 font-medium block whitespace-nowrap">{sub.submittedAt}</span>
+                                </td>
+
+                                {/* 4. Dokumen PDF RAB & Kategori */}
+                                <td className="px-4 py-4">
+                                  <div className="flex items-start gap-2.5">
+                                    <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 border border-rose-200 dark:border-rose-900 shrink-0 mt-0.5">
+                                      <FileSpreadsheet className="w-4 h-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <span className="font-bold text-slate-900 dark:text-white block truncate max-w-xs" title={sub.rabFileName}>
+                                        {sub.rabFileName}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono block">{sub.rabFileSize || "2.1 MB"} &bull; Format PDF</span>
+
+                                      {/* Tags Kategori & Deskripsi */}
+                                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                        {(sub.kategori || sub.kategori1) && (
+                                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-cyan-50 dark:bg-cyan-950/60 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
+                                            {sub.kategori || sub.kategori1}
+                                          </span>
+                                        )}
+                                        {sub.deskripsi && (
+                                          <span className="text-[10px] text-slate-500 dark:text-slate-400 italic block truncate max-w-[200px]" title={sub.deskripsi}>
+                                            &bull; {sub.deskripsi}
+                                          </span>
+                                        )}
+                                        {sub.kategori2 && (
+                                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            {sub.kategori2}
+                                          </span>
+                                        )}
+                                        {sub.kategori3 && (
+                                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                            {sub.kategori3}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* 4. Hierarki Anggaran */}
+                                <td className="px-4 py-4">
+                                  <span className="font-semibold text-slate-900 dark:text-slate-200 block truncate max-w-xs" title={sub.kegiatan}>
+                                    {sub.kegiatan}
+                                  </span>
+                                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block truncate max-w-xs mt-0.5">
+                                    {sub.kro} &bull; {sub.ro}
+                                  </span>
+                                  {sub.tahunAnggaran && (
+                                    <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                      TA {sub.tahunAnggaran}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* 5. User Logging (Create & Update info) */}
+                                <td className="px-4 py-4">
+                                  <div className="space-y-1">
+                                    <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200">Created: </span>
+                                      <span className="truncate block" title={creator}>
+                                        {creator}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                                      <span className="font-semibold text-slate-800 dark:text-slate-200">Updated: </span>
+                                      <span className="truncate block" title={updater}>
+                                        {updater}
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setHistoryLogItem(sub)}
+                                      className="inline-flex items-center gap-1 text-[10px] font-bold text-cyan-600 dark:text-cyan-400 hover:underline cursor-pointer pt-0.5"
+                                    >
+                                      <History className="w-3 h-3" />
+                                      <span>Lihat History CRUD PDF</span>
+                                    </button>
+                                  </div>
+                                </td>
+
+                                {/* 6. Hasil AI */}
+                                <td className="px-4 py-4 text-center">
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                                      sub.aiStatus === "LOLOS"
+                                        ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                        : "bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                                    }`}
+                                  >
+                                    {sub.aiStatus === "LOLOS" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                                    {sub.aiScore}%
+                                  </span>
+                                </td>
+
+                                {/* 7. Status Verifikasi (Bisa Diklik Membuka Halaman Evaluasi & Reupload) */}
+                                <td className="px-4 py-4">
+                                  {sub.verificationStatus === "Menunggu" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenReviewDetail(sub)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-all shadow-2xs hover:shadow-md hover:scale-105 cursor-pointer group"
+                                      title="Klik untuk melihat Evaluasi AI 20 Kriteria & Reupload Dokumen (Status: Menunggu)"
+                                    >
+                                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Menunggu</span>
+                                      <ArrowRight className="w-3 h-3 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                                    </button>
+                                  )}
+                                  {sub.verificationStatus === "Diterima" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenReviewDetail(sub)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-all shadow-2xs hover:shadow-md hover:scale-105 cursor-pointer group"
+                                      title="Klik untuk melihat Evaluasi AI 20 Kriteria & Reupload Dokumen (Status: Diterima)"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>Diterima</span>
+                                      <ArrowRight className="w-3 h-3 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                                    </button>
+                                  )}
+                                  {sub.verificationStatus === "Ditolak" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenReviewDetail(sub)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all shadow-2xs hover:shadow-md hover:scale-105 cursor-pointer group"
+                                      title="Klik untuk melihat Evaluasi AI 20 Kriteria & Reupload Dokumen (Status: Ditolak)"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                                      <span>Ditolak</span>
+                                      <ArrowRight className="w-3 h-3 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                                    </button>
+                                  )}
+                                </td>
+
+                                {/* 8. Aksi (CRUD) */}
+                                <td className="px-4 py-4 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    {/* Read: Detail */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedDetailSubmission(sub)}
+                                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+                                      title="Read: Lihat Detail Lengkap"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
+
+                                    {/* Read: Preview PDF */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setHistoryPreviewItem(sub)}
+                                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-950/60 dark:hover:bg-cyan-900/60 text-cyan-700 dark:text-cyan-300 transition-colors cursor-pointer border border-cyan-200 dark:border-cyan-800"
+                                      title="Read: Pratinjau Dokumen PDF Asli"
+                                    >
+                                      <ExternalLink className="w-4 h-4" />
+                                    </button>
+
+                                    {/* Update: Edit Dokumen */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEdit(sub)}
+                                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 transition-colors cursor-pointer border border-amber-200 dark:border-amber-800"
+                                      title="Update: Edit Nama & Kategori Berkas"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    {/* Delete: Hapus Dokumen */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeleteCandidate(sub)}
+                                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 transition-colors cursor-pointer border border-rose-200 dark:border-rose-800"
+                                      title="Delete: Hapus Dokumen dari Daftar"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    {/* Print / Cetak PDF */}
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setHistoryPrintItem({
+                                          submission: sub,
+                                          reportType: sub.verificationStatus === "Diterima" ? "verified-report" : "ai-result",
+                                        })
+                                      }
+                                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 transition-colors cursor-pointer border border-blue-200 dark:border-blue-800"
+                                      title="Cetak Dokumen Hasil AI / Berita Acara"
+                                    >
+                                      <Printer className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* 3. VIEW SUB-TAB: DETAIL EVALUASI AI 20 KRITERIA & REUPLOAD BERKAS */}
+      {/* ================================================================== */}
+      {activeRabSubTab === "detail" && reviewDetailSubmission && (
+        <SatkerReviewDetailView
+          submission={reviewDetailSubmission}
+          currentUser={currentUser}
+          regulations={regulations}
+          onBack={handleBackToDaftarRab}
+          onUpdateSubmission={onUpdateSubmission}
+          onPreviewPdf={(sub) => setHistoryPreviewItem(sub)}
+          onPrintReport={(item) => setHistoryPrintItem(item)}
+        />
+      )}
+
+      {/* ================================================================== */}
+      {/* 2. VIEW SUB-TAB: FORM PENGAJUAN RAB BARU */}
+      {/* ================================================================== */}
+      {activeRabSubTab === "form" && (
+        <div className="space-y-10 sm:space-y-12 animate-fadeIn">
+          {/* GABUNGAN PEMBAHASAN 1 & PEMBAHASAN 2 MENJADI SATU KESATUAN FORM */}
+          <div className="relative bg-white dark:bg-slate-900 border-2 border-cyan-500 dark:border-cyan-500 rounded-2xl p-6 sm:p-8 pt-8 sm:pt-9 shadow-sm space-y-6 sm:space-y-7 transition-all">
+            {/* Outline Label Badge Terpadu */}
+            <div className="absolute -top-3.5 left-5 sm:left-6 z-10 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider shadow-sm border bg-cyan-600 text-white border-cyan-400 select-none">
+              <Upload className="w-3.5 h-3.5" />
+              <span>PEMBAHASAN TERPADU &bull; FORMULIR PENGAJUAN TELAAH DOKUMEN RAB BARU</span>
+            </div>
+
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                  <span>Formulir Terpadu Hierarki Anggaran &amp; Berkas PDF RAB</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Lengkapi hierarki anggaran beserta tahun anggaran, tentukan klasifikasi kategori dan deskripsi, unggah dokumen PDF RAB, dan kirim untuk pemeriksaan otomatis AI.
+                </p>
+              </div>
+
               <button
-                id="btn-preview-rab-popup"
                 type="button"
-                onClick={() => setPreviewOpen(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-blue-500/20"
-                title="Pop-up Pratinjau Dokumen RAB PDF"
+                onClick={() => setIsUnifiedFormCollapsed(!isUnifiedFormCollapsed)}
+                className="h-8 px-3 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold"
+                title={isUnifiedFormCollapsed ? "Perluas Formulir" : "Minimize Formulir"}
               >
-                <Eye className="w-4 h-4" />
-                <span>Preview PDF RAB</span>
+                <span>{isUnifiedFormCollapsed ? "Perluas" : "Minimize"}</span>
+                {isUnifiedFormCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {!isUnifiedFormCollapsed && (
+              <div className="space-y-6 animate-fadeIn">
+                {/* SUB-SECTION A: HIERARKI ANGGARAN RKA-K/L (CASCADING DROPDOWN) */}
+                <div className="p-5 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 rounded-2xl space-y-4">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide block">A. Parameter Hierarki Anggaran RKA-K/L (Cascading)</span>
+
+                  <div className="flex flex-col space-y-4">
+                    {/* a. Program */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        a. Program <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          id="select-program"
+                          value={selectedProgram}
+                          onChange={(e) => setSelectedProgram(e.target.value)}
+                          className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white appearance-none pr-8 font-medium shadow-2xs"
+                        >
+                          <option value="" disabled>
+                            -- Pilih Program Anggaran --
+                          </option>
+                          {programs.map((prog) => (
+                            <option key={prog} value={prog} className="dark:bg-slate-800 dark:text-white">
+                              {prog}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* b. Kegiatan */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        b. Kegiatan <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          id="select-kegiatan"
+                          value={selectedKegiatan}
+                          onChange={(e) => setSelectedKegiatan(e.target.value)}
+                          disabled={!selectedProgram || kegiatans.length === 0}
+                          className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white appearance-none pr-8 font-medium disabled:opacity-50 shadow-2xs"
+                        >
+                          <option value="" disabled>
+                            -- Pilih Kegiatan --
+                          </option>
+                          {kegiatans.map((item) => (
+                            <option key={item.kegiatan} value={item.kegiatan} className="dark:bg-slate-800 dark:text-white">
+                              {item.kegiatan}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* c. KRO */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        c. Klasifikasi Rincian Output (KRO) <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          id="select-kro"
+                          value={selectedKro}
+                          onChange={(e) => setSelectedKro(e.target.value)}
+                          disabled={!selectedKegiatan || kros.length === 0}
+                          className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white appearance-none pr-8 font-medium disabled:opacity-50 shadow-2xs"
+                        >
+                          <option value="" disabled>
+                            -- Pilih KRO --
+                          </option>
+                          {kros.map((item) => (
+                            <option key={item.kro} value={item.kro} className="dark:bg-slate-800 dark:text-white">
+                              {item.kro}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* d. RO */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        d. Rincian Output (RO) <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          id="select-ro"
+                          value={selectedRo}
+                          onChange={(e) => setSelectedRo(e.target.value)}
+                          disabled={!selectedKro || ros.length === 0}
+                          className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white appearance-none pr-8 font-medium disabled:opacity-50 shadow-2xs"
+                        >
+                          <option value="" disabled>
+                            -- Pilih RO --
+                          </option>
+                          {ros.map((item) => (
+                            <option key={item} value={item} className="dark:bg-slate-800 dark:text-white">
+                              {item}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* e. Tahun Anggaran */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        e. Tahun Anggaran <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        id="input-tahun-anggaran"
+                        type="text"
+                        value={selectedTahunAnggaran}
+                        onChange={(e) => setSelectedTahunAnggaran(e.target.value)}
+                        placeholder="Contoh: 2026"
+                        className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white font-medium shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Info Box Hierarchy */}
+                  {(currentUnitEselon1 || currentUnitEselon2 || currentPrioritas) && (
+                    <div className="p-3.5 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Unit Eselon I:</span>
+                        <span className="text-slate-800 dark:text-slate-200 font-medium truncate block">{currentUnitEselon1 || "-"}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Unit Eselon II:</span>
+                        <span className="text-slate-800 dark:text-slate-200 font-medium truncate block">{currentUnitEselon2 || "-"}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Prioritas:</span>
+                        <span className="font-bold text-amber-700 dark:text-amber-400 block">{currentPrioritas || "Bukan Prioritas Nasional"}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* SUB-SECTION B: KLASIFIKASI KATEGORI & DESKRIPSI USULAN RAB */}
+                <div className="p-5 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 rounded-2xl space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">B. Klasifikasi Kategori Usulan RAB</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Kategori (Dropdown pilihan: Kategori 1, Kategori 2, Kategori 3) */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Kategori <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          id="select-kategori"
+                          value={formKategori}
+                          onChange={(e) => setFormKategori(e.target.value)}
+                          className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white appearance-none pr-8 font-medium shadow-2xs cursor-pointer"
+                        >
+                          <option value="" disabled>
+                            -- Pilih Kategori --
+                          </option>
+                          <option value="Kategori 1">Kategori 1</option>
+                          <option value="Kategori 2">Kategori 2</option>
+                          <option value="Kategori 3">Kategori 3</option>
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* Deskripsi (Kolom teks disamping Kategori) */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Deskripsi <span className="text-slate-400 font-normal lowercase">(kolom teks)</span>
+                      </label>
+                      <input
+                        id="input-deskripsi"
+                        type="text"
+                        value={formDeskripsi}
+                        onChange={(e) => setFormDeskripsi(e.target.value)}
+                        placeholder="Contoh: Belanja Modal TIK, Pengadaan Server, Bimtek..."
+                        className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 text-slate-900 dark:text-white shadow-2xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* SUB-SECTION C: UNGGAH BERKAS DOKUMEN PDF RAB */}
+                <div className="p-5 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 rounded-2xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide block">C. Unggah Berkas Dokumen PDF RAB</span>
+                    <span className="text-[11px] text-slate-400 font-medium">Format: .pdf</span>
+                  </div>
+
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-2xl p-5 bg-white dark:bg-slate-800/60 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                      <div
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${
+                          rabFile
+                            ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400"
+                            : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400"
+                        }`}
+                      >
+                        <FileSpreadsheet className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-slate-900 dark:text-white truncate">{rabFileName || "Belum ada berkas PDF dipilih"}</span>
+                          {rabFile ? (
+                            <span className="px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10px] rounded-full font-mono font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              {(rabFile.size / (1024 * 1024)).toFixed(2)} MB &bull; PDF Terpilih
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] rounded-full font-semibold flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> Wajib Unggah PDF
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Pilih dokumen PDF RAB resmi Satker Anda untuk diperiksa kepatuhan tarif dan kalkulasi anggarannya.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0">
+                      <label
+                        htmlFor="rab-file-upload-input"
+                        className="h-10 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition-colors shadow-2xs inline-flex items-center justify-center gap-2"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{rabFile ? "Ganti Berkas PDF" : "Pilih Berkas PDF"}</span>
+                      </label>
+                      <input id="rab-file-upload-input" type="file" accept=".pdf" onChange={handleRabUpload} className="hidden" />
+
+                      {rabFile && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewOpen(true)}
+                          className="h-10 px-4 bg-sky-50 dark:bg-slate-800 text-cyan-700 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-700 hover:bg-cyan-100 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-2 transition-all cursor-pointer"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span>Preview PDF</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {uploadError && (
+                  <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl text-rose-700 dark:text-rose-400 text-xs flex items-center gap-2.5">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                    <span>{uploadError}</span>
+                  </div>
+                )}
+
+                {/* ACTION BUTTONS */}
+                {/* Aturan Spesifik: Tombol Hapus/Reset Formulir HANYA MUNCUL setelah user selesai memilih berkas PDF */}
+                <div className="border-t border-slate-100 dark:border-slate-800 pt-6 flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    {rabFile !== null ? (
+                      <button
+                        id="btn-satker-reset"
+                        type="button"
+                        onClick={handleResetForm}
+                        className="h-11 sm:h-12 px-5 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-300 dark:border-slate-700 hover:border-rose-300 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-98 shadow-2xs cursor-pointer animate-fadeIn"
+                        title="Hapus / Reset Formulir (muncul setelah memilih berkas PDF)"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-500" />
+                        <span>Hapus / Reset Formulir</span>
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic">Tombol reset formulir akan muncul setelah Anda memilih berkas PDF.</span>
+                    )}
+                  </div>
+
+                  <button
+                    id="btn-satker-submit"
+                    type="button"
+                    disabled={isAnalyzing}
+                    onClick={handleAiSubmit}
+                    className="h-11 sm:h-12 px-6 sm:px-8 bg-cyan-600 hover:bg-cyan-500 text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2.5 shadow-md shadow-cyan-600/30 hover:shadow-lg active:scale-98 transition-all disabled:opacity-60 cursor-pointer ring-1 ring-cyan-500"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>{analysisProgressText || "Memproses Pengecekan AI..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>Submit &amp; Periksa RAB dengan AI (LLM)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* AI Loading Progress Banner */}
+          {isAnalyzing && (
+            <div className="p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-center space-y-4 shadow-xs transition-colors">
+              <div className="inline-flex p-4 rounded-full bg-cyan-50 dark:bg-cyan-950 text-cyan-600 dark:text-cyan-400 mb-2">
+                <Loader2 className="w-8 h-8 animate-spin" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Engine AI LLM Sedang Menelaah Dokumen RAB</h3>
+              <p className="text-xs text-cyan-700 dark:text-cyan-400 font-mono animate-pulse">{analysisProgressText}</p>
+              <div className="max-w-md mx-auto bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div className="bg-cyan-500 h-full w-3/4 animate-pulse rounded-full" />
+              </div>
+            </div>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* TRIGGER POST-SUBMIT: DAFTAR DOKUMEN ACUAN TERKAIT BERKAS PDF  */}
+          {/* MUNCUL KETIKA PENGAJUAN TELAH BERHASIL DILAKUKAN              */}
+          {/* ------------------------------------------------------------- */}
+          {showReferenceDocsTrigger && currentSubmission && (
+            <div
+              id="post-submit-reference-section"
+              className="relative bg-emerald-50/70 dark:bg-emerald-950/40 border-2 border-emerald-500 dark:border-emerald-600 rounded-2xl p-6 sm:p-8 pt-8 sm:pt-9 shadow-sm space-y-5 animate-fadeIn"
+            >
+              {/* Outline Label Badge */}
+              <div className="absolute -top-3.5 left-5 sm:left-6 z-10 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider shadow-sm border bg-emerald-600 text-white border-emerald-400 select-none">
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>POST-SUBMIT TRIGGER &bull; DOKUMEN ACUAN TERKAIT BERKAS PDF</span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-emerald-200/80 dark:border-emerald-800/80">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900 dark:text-white">Pengajuan Berhasil &bull; Tiket {currentSubmission.ticketNumber}</h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                      Berkas PDF "{currentSubmission.rabFileName}" telah terdaftar. Berikut adalah daftar dokumen acuan regulasi resmi terkait:
+                    </p>
+                  </div>
+                </div>
+
+                {onSelectMenu && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectMenu("satker_list")}
+                    className="h-10 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer transition-all shrink-0"
+                  >
+                    <span>Lihat di Daftar RAB</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* List of Related Reference Documents */}
+              <div className="space-y-3">
+                <span className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider block">Daftar Dokumen Acuan Terkait Berkas PDF yang Baru Diunggah:</span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(currentSubmission.referenceDocuments || []).map((doc, idx) => (
+                    <div key={idx} className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-start gap-3 shadow-2xs">
+                      <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5">
+                        <Scale className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white block leading-snug">{doc}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 block">Dokumen Regulasi Acuan AI</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI Results Section */}
+          {currentSubmission && !isAnalyzing && (
+            <div
+              id="ai-results-section"
+              className="relative bg-white dark:bg-slate-900 border-2 border-amber-500 dark:border-amber-500 rounded-2xl p-6 sm:p-8 pt-8 sm:pt-9 shadow-sm space-y-6 animate-fadeIn"
+            >
+              {/* Outline Label Badge */}
+              <div className="absolute -top-3.5 left-5 sm:left-6 z-10 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider shadow-sm border bg-amber-600 text-white border-amber-400 select-none">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>HASIL PENELAAHAN AI &bull; 20 KRITERIA KEPATUHAN SBM</span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <span>Laporan Evaluasi Penapisan AI Dokumen RAB</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Tiket: {currentSubmission.ticketNumber} &bull; Skor: {currentSubmission.aiScore}% ({currentSubmission.aiStatus})
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsPrintModalOpen(true)}
+                    className="h-9 px-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Cetak Laporan Telaah AI</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsResultsCollapsed(!isResultsCollapsed)}
+                    className="h-9 px-3 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+                  >
+                    <span>{isResultsCollapsed ? "Perluas" : "Minimize"}</span>
+                    {isResultsCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {!isResultsCollapsed && (
+                <div className="space-y-5 animate-fadeIn">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+                    <div>
+                      <strong className="text-slate-900 dark:text-white">Alasan AI: </strong>
+                      <span className="text-slate-700 dark:text-slate-300">{currentSubmission.aiReason}</span>
+                    </div>
+                    {currentSubmission.aiRecommendation && (
+                      <div>
+                        <strong className="text-slate-900 dark:text-white">Rekomendasi AI: </strong>
+                        <span className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{currentSubmission.aiRecommendation}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 20 Criteria Preview List */}
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden max-h-96 overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 w-12 text-center">No</th>
+                          <th className="px-4 py-3">Kriteria Wajib SBM</th>
+                          <th className="px-4 py-3 w-28 text-center">Hasil AI</th>
+                          <th className="px-4 py-3">Catatan Bukti AI</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {currentSubmission.criteriaResults.map((c) => (
+                          <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                            <td className="px-4 py-2.5 text-center font-mono text-slate-400">{c.id}</td>
+                            <td className="px-4 py-2.5 font-medium text-slate-900 dark:text-white">{c.text}</td>
+                            <td className="px-4 py-2.5 text-center">
+                              {c.status === "passed" ? (
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[11px] font-bold">Lolos</span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full text-[11px] font-bold">Ditolak</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">{c.notes}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* MODAL: DETAIL SUBMISSION (READ)                                     */}
+      {/* ================================================================== */}
+      {selectedDetailSubmission && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden transition-colors">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-slate-900 dark:text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 border border-cyan-200 dark:border-cyan-800">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold">Informasi Detail Dokumen RAB</h3>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded-full bg-cyan-50 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 font-bold">
+                      {selectedDetailSubmission.ticketNumber}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Diajukan pada {selectedDetailSubmission.submittedAt} &bull; {selectedDetailSubmission.satkerUserName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDetailSubmission(null)}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-5">
+              {/* Status Banner */}
+              <div className="p-4 rounded-xl border flex items-center justify-between gap-3 text-xs bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Status Verifikasi:</span>
+                  <span className="font-bold text-sm text-slate-900 dark:text-white mt-0.5 block">{selectedDetailSubmission.verificationStatus}</span>
+                  {selectedDetailSubmission.verifikatorNotes && <p className="text-slate-600 dark:text-slate-300 mt-1">Catatan: {selectedDetailSubmission.verifikatorNotes}</p>}
+                </div>
+                <span
+                  className={`px-3 py-1 rounded-full font-bold text-xs ${
+                    selectedDetailSubmission.aiStatus === "LOLOS"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                      : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                  }`}
+                >
+                  AI: {selectedDetailSubmission.aiStatus} ({selectedDetailSubmission.aiScore}%)
+                </span>
+              </div>
+
+              {/* Hierarchy and Categories */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block text-[11px]">Hierarki Anggaran RKA-K/L</span>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Program:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 block truncate">{selectedDetailSubmission.program}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Kegiatan:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 block truncate">{selectedDetailSubmission.kegiatan}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">KRO &bull; RO:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 block truncate">
+                      {selectedDetailSubmission.kro} &bull; {selectedDetailSubmission.ro}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Tahun Anggaran:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 block">{selectedDetailSubmission.tahunAnggaran || "2026"}</span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block text-[11px]">Klasifikasi Kategori &amp; User Logging</span>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Kategori:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 block">{selectedDetailSubmission.kategori || selectedDetailSubmission.kategori1 || "-"}</span>
+                  </div>
+                  {selectedDetailSubmission.deskripsi && (
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Deskripsi:</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 block">{selectedDetailSubmission.deskripsi}</span>
+                    </div>
+                  )}
+                  {selectedDetailSubmission.kategori2 && (
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Kategori 2 (Lama):</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 block">{selectedDetailSubmission.kategori2}</span>
+                    </div>
+                  )}
+                  {selectedDetailSubmission.kategori3 && (
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Kategori 3 (Lama):</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 block">{selectedDetailSubmission.kategori3}</span>
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Created By:</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 block">{selectedDetailSubmission.createdBy || selectedDetailSubmission.satkerUserName}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedDetailSubmission(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Tutup
               </button>
             </div>
           </div>
         </div>
-
-        {/* Action Buttons: Submit & Hapus (Requirement) */}
-        <div className="border-t border-slate-100 dark:border-slate-800 pt-5 flex flex-wrap items-center justify-between gap-3">
-          <button
-            id="btn-satker-reset"
-            type="button"
-            onClick={handleResetForm}
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-2 transition-colors"
-          >
-            <Trash2 className="w-4 h-4 text-rose-500" />
-            <span>Hapus / Reset Formulir</span>
-          </button>
-
-          <button
-            id="btn-satker-submit"
-            type="button"
-            disabled={isAnalyzing}
-            onClick={handleAiSubmit}
-            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-2.5 shadow-lg shadow-blue-600/30 transition-all disabled:opacity-60"
-          >
-            {isAnalyzing ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>{analysisProgressText || 'Memproses Pengecekan AI...'}</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>Submit &amp; Periksa RAB dengan AI (LLM)</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* AI Loading Progress Banner */}
-      {isAnalyzing && (
-        <div className="p-8 bg-slate-900 border border-slate-800 rounded-2xl text-center space-y-4 shadow-xl">
-          <div className="inline-flex p-4 rounded-full bg-blue-500/10 text-blue-400 mb-2">
-            <Loader2 className="w-8 h-8 animate-spin" />
-          </div>
-          <h3 className="text-base font-bold text-white tracking-tight">
-            Engine AI LLM Sedang Menelaah Dokumen RAB
-          </h3>
-          <p className="text-xs text-blue-300 font-mono animate-pulse">
-            {analysisProgressText}
-          </p>
-          <div className="max-w-md mx-auto bg-slate-800 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-blue-500 h-full w-3/4 animate-pulse rounded-full" />
-          </div>
-          <p className="text-[11px] text-slate-400">
-            Pengecekan mencakup 20 Kriteria Wajib Dokumen Rincian Anggaran Biaya (RAB) Sesuai Standar Biaya Masukan (SBM) PMK &amp; RKA-K/L.
-          </p>
-        </div>
       )}
 
-      {/* Requirement: "Ketika telah disubmit maka akan muncul hasilnya pengecekannya dibawah, jika belum submit maka tidak muncul hasilnya sesuai dengan isian PDF 'hasil AI.pdf'" */}
-      {currentSubmission && !isAnalyzing && (
-        <div 
-          id="ai-results-section"
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden animate-fadeIn"
-        >
-          {/* Header of Results */}
-          <div className="p-6 bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
+      {/* ================================================================== */}
+      {/* MODAL: EDIT DOKUMEN (UPDATE CRUD)                                  */}
+      {/* ================================================================== */}
+      {editItem && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden transition-colors">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-slate-900 dark:text-white">
               <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 text-[10px] font-bold rounded uppercase">
-                  Hasil Penelaahan AI (LLM)
-                </span>
-                <span className="text-xs text-slate-500 font-mono">
-                  Tiket: {currentSubmission.ticketNumber}
-                </span>
+                <Pencil className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                <h3 className="text-base font-bold">Edit Metadata Dokumen RAB</h3>
               </div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                Laporan Hasil Pengecekan Dokumen RAB "hasil AI.pdf"
-              </h3>
+              <button type="button" onClick={() => setEditItem(null)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Requirement: "diakhir ada fitur cetak pdf" */}
-            <button
-              id="btn-cetak-pdf-satker"
-              onClick={() => setIsPrintModalOpen(true)}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors self-start sm:self-auto"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Cetak Hasil AI (PDF)</span>
-            </button>
-          </div>
+            <form onSubmit={handleSaveEdit} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nama Dokumen PDF</label>
+                <input
+                  type="text"
+                  value={editFileName}
+                  onChange={(e) => setEditFileName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium"
+                  required
+                />
+              </div>
 
-          <div className="p-6 space-y-6">
-            {/* Status Card & Overview Banner */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Status Badge */}
-              <div className={`p-5 rounded-2xl border flex flex-col justify-between ${
-                currentSubmission.aiStatus === 'LOLOS'
-                  ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200'
-                  : 'bg-rose-50/80 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-950 dark:text-rose-200'
-              }`}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider opacity-75 block">Status Kelayakan AI</span>
-                  <div className="text-2xl font-black mt-1 flex items-center gap-2">
-                    {currentSubmission.aiStatus === 'LOLOS' ? (
-                      <>
-                        <CheckCircle2 className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
-                        <span>LOLOS</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-7 h-7 text-rose-600 dark:text-rose-400" />
-                        <span>TIDAK LOLOS</span>
-                      </>
-                    )}
-                  </div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Kategori</label>
+                  <select
+                    value={editKategori}
+                    onChange={(e) => setEditKategori(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium"
+                  >
+                    <option value="Kategori 1">Kategori 1</option>
+                    <option value="Kategori 2">Kategori 2</option>
+                    <option value="Kategori 3">Kategori 3</option>
+                  </select>
                 </div>
-                <div className="mt-3 text-xs opacity-90">
-                  Tingkat Kepatuhan: <strong className="font-mono">{currentSubmission.aiScore}%</strong> (20 Kriteria Wajib RAB)
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tahun Anggaran</label>
+                  <input
+                    type="text"
+                    value={editTahunAnggaran}
+                    onChange={(e) => setEditTahunAnggaran(e.target.value)}
+                    placeholder="Contoh: 2026"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium"
+                  />
                 </div>
               </div>
 
-              {/* Alasan */}
-              <div className="p-5 bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-2xl col-span-2">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block uppercase mb-1">
-                  Alasan &amp; Dasar Penilaian AI (RAB):
-                </span>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {currentSubmission.aiReason}
-                </p>
-                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800/80">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block uppercase mb-1">
-                    Rekomendasi Perbaikan Dokumen:
-                  </span>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed">
-                    {currentSubmission.aiRecommendation}
-                  </p>
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Deskripsi</label>
+                <input
+                  type="text"
+                  value={editDeskripsi}
+                  onChange={(e) => setEditDeskripsi(e.target.value)}
+                  placeholder="Keterangan / deskripsi usulan..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 font-medium"
+                />
+              </div>
+
+              <div className="pt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                Pembaruan ini akan dicatat ke dalam log history dengan akun pembaru: <strong className="text-slate-800 dark:text-slate-200">{currentUser.name}</strong>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setEditItem(null)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button type="submit" className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow-xs">
+                  Simpan Perubahan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* MODAL: KONFIRMASI HAPUS DOKUMEN (DELETE CRUD)                      */}
+      {/* ================================================================== */}
+      {deleteCandidate && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Konfirmasi Hapus Dokumen</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Tindakan ini akan menghapus dokumen dari sistem pengajuan RAB.</p>
               </div>
             </div>
 
-            {/* Checklist Table (Exact 20 RAB Criteria) */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                  Daftar Pengecekan 20 Kriteria Wajib RAB:
-                </h4>
-                <span className="text-[11px] text-slate-500">
-                  {currentSubmission.criteriaResults.filter(c => c.status === 'passed').length} dari 20 Kriteria Terpenuhi
-                </span>
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 uppercase font-semibold">
-                    <tr>
-                      <th className="px-4 py-3 w-12 text-center">No</th>
-                      <th className="px-4 py-3">Teks Kriteria Wajib Dokumen RAB</th>
-                      <th className="px-4 py-3 w-28 text-center">Status AI</th>
-                      <th className="px-4 py-3">Keterangan / Bukti Temuan</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                    {currentSubmission.criteriaResults.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                        <td className="px-4 py-3 text-center font-mono text-slate-500">{c.id}</td>
-                        <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">
-                          <div>{c.text}</div>
-                          {c.category && (
-                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{c.category}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {c.status === 'passed' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Lolos
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300">
-                              <XCircle className="w-3.5 h-3.5" />
-                              Tidak
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-[11px]">{c.notes}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+              <span className="font-bold block text-slate-900 dark:text-white truncate">{deleteCandidate.rabFileName}</span>
+              <span className="text-[11px] text-slate-500 font-mono mt-0.5 block">{deleteCandidate.ticketNumber}</span>
             </div>
 
-            {/* Notification */}
-            <div className="p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 rounded-xl flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2.5 text-indigo-900 dark:text-indigo-200">
-                <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                <span>
-                  Dokumen RAB berhasil diajukan ke antrean <strong>Verifikator Anggaran</strong> untuk telaah baris per baris.
-                </span>
-              </div>
-              <span className="text-[11px] text-indigo-700 dark:text-indigo-400 font-mono">Status: Menunggu Verifikasi</span>
+            <div className="flex justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteCandidate(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button type="button" onClick={handleConfirmDelete} className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow-xs">
+                Hapus Dokumen
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* PDF Preview Modal for RAB */}
+      {/* ================================================================== */}
+      {/* MODAL: LOG HISTORY CRUD FILE PDF (USER LOGGING AUDIT TRAIL)       */}
+      {/* ================================================================== */}
+      {historyLogItem && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden transition-colors">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-slate-900 dark:text-white">
+              <div className="flex items-center gap-2">
+                <History className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+                <h3 className="text-base font-bold">History CRUD Dokumen PDF</h3>
+              </div>
+              <button type="button" onClick={() => setHistoryLogItem(null)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+                <span className="font-bold text-slate-900 dark:text-white block">{historyLogItem.rabFileName}</span>
+                <span className="text-[11px] text-slate-500 font-mono mt-0.5 block">{historyLogItem.ticketNumber}</span>
+              </div>
+
+              <div className="space-y-3">
+                <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide block">Aktivitas Pengguna (User Logging):</span>
+
+                <div className="border border-slate-200 dark:border-slate-800 rounded-xl divide-y divide-slate-100 dark:divide-slate-800">
+                  {(historyLogItem.auditTrail && historyLogItem.auditTrail.length > 0
+                    ? historyLogItem.auditTrail
+                    : [
+                        {
+                          action: "CREATE" as const,
+                          performedBy: historyLogItem.createdBy || `${historyLogItem.satkerUserName} (${historyLogItem.satkerUserId})`,
+                          timestamp: historyLogItem.submittedAt,
+                          details: `Pendaftaran dokumen awal: ${historyLogItem.rabFileName}`,
+                        },
+                      ]
+                  ).map((entry, i) => (
+                    <div key={i} className="p-3.5 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            entry.action === "CREATE"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : entry.action === "UPDATE"
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                          }`}
+                        >
+                          {entry.action}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">{entry.timestamp}</span>
+                      </div>
+                      <div className="font-semibold text-slate-900 dark:text-white mt-1">Oleh: {entry.performedBy}</div>
+                      {entry.details && <p className="text-[11px] text-slate-500 dark:text-slate-400">{entry.details}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setHistoryLogItem(null)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History PDF Preview Modal */}
+      {historyPreviewItem && (
+        <PdfPreviewModal
+          isOpen={!!historyPreviewItem}
+          onClose={() => setHistoryPreviewItem(null)}
+          fileName={historyPreviewItem.rabFileName}
+          fileDataUrl={historyPreviewItem.pdfDataUrl}
+          ticketNumber={historyPreviewItem.ticketNumber}
+          submissionId={historyPreviewItem.id}
+          title={`Pratinjau Dokumen RAB: ${historyPreviewItem.ticketNumber}`}
+          metadata={{
+            program: historyPreviewItem.program,
+            kegiatan: historyPreviewItem.kegiatan,
+            kro: historyPreviewItem.kro,
+            ro: historyPreviewItem.ro,
+            unit: historyPreviewItem.unitEselon1,
+            satkerName: historyPreviewItem.satkerUserName,
+            prioritas: historyPreviewItem.prioritas,
+            aiStatus: historyPreviewItem.aiStatus,
+            aiScore: historyPreviewItem.aiScore,
+            submittedAt: historyPreviewItem.submittedAt,
+          }}
+          onUploadFile={async (file) => {
+            await storePdfBlob(historyPreviewItem.id, file);
+            await storePdfBlob(historyPreviewItem.ticketNumber, file);
+            await storePdfBlob(file.name, file);
+            const newUrl = URL.createObjectURL(file);
+            const updated: SubmissionData = {
+              ...historyPreviewItem,
+              rabFileName: file.name,
+              rabFileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+              pdfDataUrl: newUrl,
+            };
+            setHistoryPreviewItem(updated);
+            if (onUpdateSubmission) {
+              onUpdateSubmission(updated);
+            }
+          }}
+        />
+      )}
+
+      {/* History Printable Report Modal */}
+      {historyPrintItem && <PrintableReport isOpen={!!historyPrintItem} onClose={() => setHistoryPrintItem(null)} submission={historyPrintItem.submission} reportType={historyPrintItem.reportType} />}
+
+      {/* PDF Preview Modal for RAB (Live Form) */}
       <PdfPreviewModal
         isOpen={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        fileName={rabFileName}
-        fileDataUrl={rabDataUrl}
+        fileName={rabFileName || "Dokumen Usulan RAB"}
+        fileDataUrl={rabBlobUrl || rabDataUrl}
         title="Pratinjau Dokumen RAB (Rincian Anggaran Biaya)"
+        ticketNumber="FORM-USULAN-BARU"
         metadata={{
           program: selectedProgram,
           kegiatan: selectedKegiatan,
           kro: selectedKro,
           ro: selectedRo,
           unit: currentUnitEselon1,
-          satkerName: currentUser.name
+          satkerName: currentUser.name,
+          prioritas: currentPrioritas,
         }}
+        onUploadFile={handleDirectFileUpload}
       />
 
-      {/* Printable Report Modal */}
-      {currentSubmission && (
-        <PrintableReport
-          isOpen={isPrintModalOpen}
-          onClose={() => setIsPrintModalOpen(false)}
-          submission={currentSubmission}
-          reportType="ai-result"
-        />
-      )}
+      {/* Printable Report Modal (Live Form) */}
+      {currentSubmission && <PrintableReport isOpen={isPrintModalOpen} onClose={() => setIsPrintModalOpen(false)} submission={currentSubmission} reportType="ai-result" />}
     </div>
   );
 };

@@ -1,154 +1,143 @@
-import React, { useState } from 'react';
-import { UserAccount } from '../types';
-import { INITIAL_USERS } from '../data/initialUsers';
-import {
-  ShieldCheck,
-  Lock,
-  User,
-  AlertCircle,
-  HelpCircle,
-  Sparkles,
-  ArrowRight,
-  Info,
-  CheckCircle2,
-  FileSpreadsheet
-} from 'lucide-react';
+import React, { useState } from "react";
+import { UserAccount } from "../types";
+import { INITIAL_USERS } from "../data/initialUsers";
+import { Lock, User, AlertCircle, HelpCircle, ArrowRight, Eye, EyeOff, Sparkles, Sun, Moon } from "lucide-react";
 
 interface LoginViewProps {
   users: UserAccount[];
+  theme?: "light" | "dark";
+  onToggleTheme?: () => void;
   onLoginSuccess: (user: UserAccount) => void;
   onOpenPromptModal: () => void;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({
-  users,
-  onLoginSuccess,
-  onOpenPromptModal
-}) => {
-  const [userId, setUserId] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+export const LoginView: React.FC<LoginViewProps> = ({ users, theme = "light", onToggleTheme, onLoginSuccess, onOpenPromptModal }) => {
+  const [userId, setUserId] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [showHelpModal, setShowHelpModal] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage('');
+    setErrorMessage("");
 
     // Requirement: "Input ID dengan character 8"
     const trimmedId = userId.trim();
 
     if (trimmedId.length !== 8) {
       // Requirement: "Jika salah input ada notifikasi: 'user ID tidak ditemukan'"
-      setErrorMessage('user ID tidak ditemukan');
+      setErrorMessage("user ID tidak ditemukan");
       return;
     }
 
     // Find user by ID (check users state, with fallback to initialUsers)
-    const foundUser = users.find(u => u.id === trimmedId) || INITIAL_USERS.find(u => u.id === trimmedId);
+    const foundUser = users.find((u) => u.id === trimmedId) || INITIAL_USERS.find((u) => u.id === trimmedId);
 
     // Requirement: "Jika salah input ada notifikasi: 'user ID tidak ditemukan'"
     if (!foundUser) {
-      setErrorMessage('user ID tidak ditemukan');
+      setErrorMessage("user ID tidak ditemukan");
       return;
     }
 
     // Password validation
     if (foundUser.password !== password) {
-      setErrorMessage('Password yang Anda masukkan salah.');
+      setErrorMessage("Password yang Anda masukkan salah.");
       return;
     }
 
     if (!foundUser.isActive) {
-      setErrorMessage('Akun ini sedang dinonaktifkan oleh Administrator.');
+      setErrorMessage("Akun ini sedang dinonaktifkan oleh Administrator.");
       return;
     }
 
     onLoginSuccess(foundUser);
   };
 
-  // Demo account quick filler and instant login
+  // Demo account quick login
   const handleQuickLogin = (id: string, pass: string) => {
     setUserId(id);
     setPassword(pass);
-    setErrorMessage('');
+    setErrorMessage("");
 
-    // Instant login on quick demo click
-    const targetUser = users.find(u => u.id === id) || INITIAL_USERS.find(u => u.id === id);
+    const targetUser = users.find((u) => u.id === id) || INITIAL_USERS.find((u) => u.id === id);
     if (targetUser) {
       if (!targetUser.isActive) {
-        setErrorMessage('Akun ini sedang dinonaktifkan oleh Administrator.');
+        setErrorMessage("Akun ini sedang dinonaktifkan oleh Administrator.");
         return;
       }
       onLoginSuccess(targetUser);
     } else {
-      setErrorMessage('user ID tidak ditemukan');
+      setErrorMessage("user ID tidak ditemukan");
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
-      {/* Background Subtle Gradient Accents */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Header Prompt Trigger */}
-      <div className="absolute top-6 right-6">
+    <div className="min-h-screen bg-gradient-to-br from-sky-200 via-sky-100 to-sky-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased text-slate-900 dark:text-slate-100 transition-colors">
+      {/* Top Simple Master Prompt AI Button & Theme Toggle */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2">
+        {onToggleTheme && (
+          <button
+            id="btn-login-toggle-theme"
+            type="button"
+            onClick={onToggleTheme}
+            className="p-2 bg-white/80 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-sky-200/80 dark:border-slate-700 rounded-xl transition-all shadow-2xs cursor-pointer hover:bg-white dark:hover:bg-slate-700 flex items-center justify-center backdrop-blur-xs"
+            title={theme === "dark" ? "Beralih ke Mode Terang (Light Mode)" : "Beralih ke Mode Gelap (Dark Mode)"}
+            aria-label="Toggle Dark Mode"
+          >
+            {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+          </button>
+        )}
         <button
-          id="btn-open-prompt-modal-login"
           type="button"
           onClick={onOpenPromptModal}
-          className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-800 rounded-xl text-xs font-medium flex items-center gap-2 transition-all shadow-md shadow-amber-500/5 hover:border-amber-500/30"
+          className="px-3.5 py-2 bg-white/80 dark:bg-slate-800 hover:bg-cyan-50/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-sky-200/80 dark:border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer backdrop-blur-xs"
+          title="Lihat Konfigurasi Prompt Gemini AI Studio"
         >
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span>Lihat Master Prompt AI Studio &amp; Backend Python (PostgreSQL)</span>
+          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+          <span className="hidden sm:inline">Prompt AI Studio</span>
         </button>
       </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        {/* App Logo & Title */}
-        <div className="flex justify-center mb-3">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20 border border-white/10">
-            <FileSpreadsheet className="w-8 h-8" />
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {/* Brand Header */}
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-3">
+            <img
+              src="/logo-komdigi-emblem.svg"
+              alt="Logo Kementerian Komunikasi dan Digital RI"
+              className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-xs transition-transform hover:scale-105"
+            />
           </div>
+
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">Selamat Datang</h1>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Sistem Verifikasi &amp; Telaah Dokumen Anggaran (RAB) Komdigi RI</p>
         </div>
 
-        <h2 className="text-center text-2xl font-black text-white tracking-tight">
-          Sistem Pengecekan File RAB AI
-        </h2>
-        <p className="mt-1 text-center text-xs text-slate-400 max-w-sm mx-auto">
-          Portal Verifikasi &amp; Telaah Otomatis Rincian Anggaran Biaya (RAB) Berbasis LLM &bull; Kementerian Komunikasi dan Digital RI
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="bg-slate-900/90 border border-slate-800 py-8 px-6 sm:px-10 rounded-2xl shadow-2xl backdrop-blur-xl">
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            {/* Requirement: "Jika salah input ada notifikasi: 'user ID tidak ditemukan'" */}
+        {/* Clean Card matching Sky Blue Theme */}
+        <div className="bg-white dark:bg-slate-900 border border-sky-200 dark:border-slate-800 rounded-2xl shadow-xl shadow-sky-950/10 p-6 sm:p-8 transition-colors">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {/* Error Message */}
             {errorMessage && (
-              <div 
+              <div
                 id="login-error-message"
-                className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-3 text-rose-300 text-xs font-semibold animate-shake"
+                className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl flex items-center gap-2.5 text-rose-700 dark:text-rose-400 text-xs font-semibold"
               >
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
-            {/* Requirement: "Input ID dengan character 8" */}
+            {/* Input User ID */}
             <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label 
-                  htmlFor="user-id-input"
-                  className="block text-xs font-semibold text-slate-300"
-                >
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="user-id-input" className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   ID Pengguna / NIP
                 </label>
-                <span className="text-[11px] font-mono text-slate-400">
-                  {userId.length}/8 Karakter
-                </span>
+                <span className="text-[10px] text-slate-400 font-mono">{userId.length}/8 Karakter</span>
               </div>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                   <User className="w-4 h-4" />
                 </div>
                 <input
@@ -156,142 +145,130 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   type="text"
                   maxLength={8}
                   value={userId}
-                  onChange={(e) => setUserId(e.target.value.replace(/\s+/g, ''))}
-                  placeholder="Contoh: 19890422 (8 digit)"
+                  onChange={(e) => setUserId(e.target.value.replace(/\s+/g, ""))}
+                  placeholder="Masukkan 8 digit ID (contoh: 19890422)"
                   required
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-mono tracking-wider"
+                  className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-600 transition-all font-mono tracking-wider shadow-2xs"
                 />
               </div>
-              <p className="mt-1 text-[10px] text-slate-400">
-                Wajib tepat 8 karakter (NIP / ID Akun).
-              </p>
             </div>
 
             {/* Input Password */}
             <div>
-              <label 
-                htmlFor="password-input"
-                className="block text-xs font-semibold text-slate-300 mb-1.5"
-              >
-                Password
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="password-input" className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Password
+                </label>
+                <button type="button" onClick={() => setShowHelpModal(true)} className="text-[11px] text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 hover:underline font-medium cursor-pointer">
+                  Lupa Password?
+                </button>
+              </div>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
                   id="password-input"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Masukkan password akun Anda"
+                  placeholder="Masukkan kata sandi"
                   required
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full pl-9 pr-10 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-600 transition-all shadow-2xs"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
-            {/* Requirement: "dibawahnya ada keterangan 'Lupa Password? Hubungi Admin'" */}
-            <div className="text-center pt-1">
-              <button
-                id="btn-lupa-password"
-                type="button"
-                onClick={() => setShowHelpModal(true)}
-                className="text-xs text-blue-400 hover:text-blue-300 hover:underline font-medium inline-flex items-center gap-1.5 transition-colors"
-              >
-                <HelpCircle className="w-3.5 h-3.5" />
-                <span>Lupa Password? Hubungi Admin</span>
-              </button>
-            </div>
-
-            {/* Requirement: "Tombol Submit" */}
+            {/* Submit Button */}
             <button
               id="btn-login-submit"
               type="submit"
-              className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center gap-2"
+              className="w-full mt-2 py-2.5 px-4 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-sm shadow-cyan-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Masuk ke Sistem</span>
+              <span>Masuk ke Akun</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          {/* Quick Demo Selector for 3 Roles (8-character ID) */}
-          <div className="mt-6 pt-5 border-t border-slate-800">
-            <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-2.5">
-              Akses Cepat Demo Akun (Klik untuk Langsung Masuk):
-            </span>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+          {/* Clean & Compact Quick Demo Access */}
+          <div className="mt-6 pt-5 border-t border-slate-200/80 dark:border-slate-800">
+            <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 text-center mb-2.5">Akses Cepat Demo Akun:</span>
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickLogin('19850115', 'password123')}
-                className="p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-left text-[11px] text-slate-300 transition-colors"
+                onClick={() => handleQuickLogin("19850115", "password123")}
+                className="p-2.5 bg-sky-50/60 dark:bg-slate-800 hover:bg-sky-100/70 dark:hover:bg-slate-700/80 border border-sky-200/70 dark:border-slate-700 rounded-xl text-center text-xs transition-colors cursor-pointer group shadow-2xs"
               >
-                <div className="font-bold text-blue-400">1. Super Admin</div>
-                <div className="font-mono text-[10px] text-slate-400">ID: 19850115</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-cyan-700 dark:group-hover:text-cyan-400 text-[11px]">Super Admin</div>
+                <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">19850115</div>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleQuickLogin('19890422', 'password123')}
-                className="p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-left text-[11px] text-slate-300 transition-colors"
+                onClick={() => handleQuickLogin("19890422", "password123")}
+                className="p-2.5 bg-sky-50/60 dark:bg-slate-800 hover:bg-sky-100/70 dark:hover:bg-slate-700/80 border border-sky-200/70 dark:border-slate-700 rounded-xl text-center text-xs transition-colors cursor-pointer group shadow-2xs"
               >
-                <div className="font-bold text-indigo-400">2. SatKer</div>
-                <div className="font-mono text-[10px] text-slate-400">ID: 19890422</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-cyan-700 dark:group-hover:text-cyan-400 text-[11px]">Satker</div>
+                <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">19890422</div>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleQuickLogin('19910718', 'password123')}
-                className="p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-left text-[11px] text-slate-300 transition-colors"
+                onClick={() => handleQuickLogin("19910718", "password123")}
+                className="p-2.5 bg-sky-50/60 dark:bg-slate-800 hover:bg-sky-100/70 dark:hover:bg-slate-700/80 border border-sky-200/70 dark:border-slate-700 rounded-xl text-center text-xs transition-colors cursor-pointer group shadow-2xs"
               >
-                <div className="font-bold text-emerald-400">3. Verifikator</div>
-                <div className="font-mono text-[10px] text-slate-400">ID: 19910718</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('19871212', 'password123')}
-                className="p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-left text-[11px] text-slate-300 transition-colors"
-              >
-                <div className="font-bold text-amber-400">4. Multi-Role (2-3 Role)</div>
-                <div className="font-mono text-[10px] text-slate-400">ID: 19871212</div>
+                <div className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-cyan-700 dark:group-hover:text-cyan-400 text-[11px]">ROCAN (verif)</div>
+                <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">19910718</div>
               </button>
             </div>
-            <p className="text-center text-[10px] text-slate-500 mt-2 font-mono">
-              Password default demo: password123
-            </p>
           </div>
         </div>
+
+        {/* Footer info */}
+        <p className="text-center text-[11px] text-slate-400 dark:text-slate-500 mt-6">Kementerian Komunikasi dan Digital Republik Indonesia &bull; 2026</p>
       </div>
 
       {/* "Lupa Password? Hubungi Admin" Modal */}
       {showHelpModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 text-white shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 text-slate-900 dark:text-slate-100 shadow-xl space-y-4 animate-in fade-in duration-150">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400">
-                <HelpCircle className="w-6 h-6" />
+              <div className="p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-950 text-cyan-600 dark:text-cyan-400">
+                <HelpCircle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">Bantuan Reset Password</h3>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Bantuan Reset Password</h3>
                 <p className="text-xs text-slate-400">Hubungi Administrator Sistem</p>
               </div>
             </div>
 
-            <div className="text-xs text-slate-300 space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800">
-              <p>Sesuai dengan ketentuan operasional:</p>
-              <ul className="list-disc list-inside space-y-1 text-slate-400 text-[11px]">
-                <li>Pengguna role <strong>SatKer</strong> dan <strong>Verifikator</strong> hanya dapat mengganti password setelah berhasil masuk ke akun masing-masing.</li>
-                <li>Jika Anda lupa password akun, silakan hubungi <strong>Super Admin</strong> pada Biro Perencanaan / PDSI Komdigi untuk melakukan reset password akun.</li>
-                <li>Kontak Helpdesk TI: <strong>helpdesk-anggaran@komdigi.go.id</strong></li>
+            <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700">
+              <p className="font-semibold text-slate-800 dark:text-slate-200">Ketentuan Reset Kata Sandi:</p>
+              <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-300 text-[11px]">
+                <li>
+                  Pengguna role <strong>SatKer</strong> dan <strong>Verifikator</strong> dapat mengubah password setelah berhasil masuk melalui menu profil.
+                </li>
+                <li>
+                  Jika Anda lupa password akun, silakan hubungi <strong>Super Admin</strong> pada Biro Perencanaan / PDSI Komdigi.
+                </li>
+                <li>
+                  Kontak Helpdesk TI: <strong className="text-cyan-700 dark:text-cyan-400">helpdesk-anggaran@komdigi.go.id</strong>
+                </li>
               </ul>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-1">
               <button
                 type="button"
                 onClick={() => setShowHelpModal(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl transition-colors"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
               >
                 Tutup
               </button>

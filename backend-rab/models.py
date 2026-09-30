@@ -16,6 +16,24 @@ class User(Base):
     phone = Column(String(30), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
+class Regulation(Base):
+    __tablename__ = "regulations"
+
+    id = Column(String(50), primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    category = Column(String(100), default="Standar Biaya Masukan (SBM)")
+    description = Column(Text, nullable=True)
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(255), nullable=False)
+    file_size = Column(String(50), nullable=True)
+    extracted_text = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    target_year = Column(String(10), default="2026")
+    uploaded_by_id = Column(String(8), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class Submission(Base):
     __tablename__ = "submissions"
 
@@ -32,6 +50,8 @@ class Submission(Base):
     prioritas = Column(String(50), nullable=False)
     rab_file_path = Column(String(255), nullable=False)
     rab_file_size = Column(String(50), nullable=True)
+    regulation_id = Column(String(50), ForeignKey("regulations.id"), nullable=True)
+    regulation_title = Column(String(255), nullable=True)
     ai_status = Column(String(20), nullable=False)         # LOLOS / TIDAK LOLOS
     ai_score = Column(Integer, nullable=False)
     ai_reason = Column(Text, nullable=True)

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Copy, Check, Sparkles, Database, Terminal, Code2 } from 'lucide-react';
+import React, { useState } from "react";
+import { X, Copy, Check, Sparkles, Database, Terminal, Code2 } from "lucide-react";
 
 interface PromptModalProps {
   isOpen: boolean;
@@ -7,7 +7,7 @@ interface PromptModalProps {
 }
 
 export const PromptModal: React.FC<PromptModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'prompt' | 'python' | 'sql'>('prompt');
+  const [activeTab, setActiveTab] = useState<"prompt" | "python" | "sql">("prompt");
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
@@ -32,7 +32,7 @@ Terdapat 3 peran (role) dalam sistem:
    - Fitur pergantian role akun: 1 akun dapat diberikan 1, 2, hingga 3 role sekaligus (Multi-Role Assignment: misalnya sebuah akun menjadi SatKer sekaligus Verifikator, dilengkapi tombol pemilih role aktif/switcher).
    - Mengelola status aktif/non-aktif akun dan reset password.
    - Ketentuan ID Pengguna: Wajib berpanjang tepat 8 karakter (NIP/ID 8 digit, misal: 19850115).
-2. SatKer (Satuan Kerja Pengusul):
+2. Satker:
    - Hanya memiliki hak akses ganti password untuk akun miliknya.
    - Mengisi usulan telaah anggaran RAB melalui cascading dropdown bertingkat.
 3. Verifikator:
@@ -498,8 +498,8 @@ ON CONFLICT (id) DO NOTHING;`;
 
   const handleCopy = () => {
     let textToCopy = masterPromptText;
-    if (activeTab === 'python') textToCopy = pythonSetupGuide;
-    if (activeTab === 'sql') textToCopy = sqlSchemaText;
+    if (activeTab === "python") textToCopy = pythonSetupGuide;
+    if (activeTab === "sql") textToCopy = sqlSchemaText;
 
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
@@ -516,28 +516,18 @@ ON CONFLICT (id) DO NOTHING;`;
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">
-                Master Prompt AI Studio &amp; Backend Full Python (FastAPI + PostgreSQL)
-              </h3>
-              <p className="text-xs text-slate-400">
-                Spesifikasi Resmi: ID 8 Karakter, Pengecekan RAB Saja, Backend Python (FastAPI) &amp; Database PostgreSQL
-              </p>
+              <h3 className="text-sm font-bold text-white">Master Prompt AI Studio &amp; Backend Full Python (FastAPI + PostgreSQL)</h3>
+              <p className="text-xs text-slate-400">Spesifikasi Resmi: ID 8 Karakter, Pengecekan RAB Saja, Backend Python (FastAPI) &amp; Database PostgreSQL</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleCopy}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
-            >
+            <button onClick={handleCopy} className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs">
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              <span>{copied ? 'Tersalin!' : 'Salin Teks'}</span>
+              <span>{copied ? "Tersalin!" : "Salin Teks"}</span>
             </button>
 
-            <button
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors"
-            >
+            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -546,28 +536,26 @@ ON CONFLICT (id) DO NOTHING;`;
         {/* Tab Switcher */}
         <div className="px-6 py-2.5 bg-slate-950/60 border-b border-slate-800 flex gap-2">
           <button
-            onClick={() => setActiveTab('prompt')}
+            onClick={() => setActiveTab("prompt")}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-              activeTab === 'prompt' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              activeTab === "prompt" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Master Prompt Gemini AI Studio</span>
           </button>
           <button
-            onClick={() => setActiveTab('python')}
+            onClick={() => setActiveTab("python")}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-              activeTab === 'python' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              activeTab === "python" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"
             }`}
           >
             <Terminal className="w-3.5 h-3.5" />
             <span>Panduan Backend Python (FastAPI &amp; PostgreSQL)</span>
           </button>
           <button
-            onClick={() => setActiveTab('sql')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-              activeTab === 'sql' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
+            onClick={() => setActiveTab("sql")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${activeTab === "sql" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}
           >
             <Database className="w-3.5 h-3.5" />
             <span>Skema DDL Database (PostgreSQL)</span>
@@ -576,9 +564,9 @@ ON CONFLICT (id) DO NOTHING;`;
 
         {/* Content Body */}
         <div className="flex-1 p-6 overflow-y-auto bg-slate-950 font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap select-all">
-          {activeTab === 'prompt' && masterPromptText}
-          {activeTab === 'python' && pythonSetupGuide}
-          {activeTab === 'sql' && sqlSchemaText}
+          {activeTab === "prompt" && masterPromptText}
+          {activeTab === "python" && pythonSetupGuide}
+          {activeTab === "sql" && sqlSchemaText}
         </div>
       </div>
     </div>
