@@ -18,9 +18,9 @@ export type ActiveMenuKey =
   | "verifikator_checklist"
   | "verifikator_pending"
   | "verifikator_completed"
-  | "menu_master_ro"
   | "master_ro_list"
-  | "master_ro_add";
+  | "master_ro_add"
+  | string;
 
 // Matriks Hak Akses Berdasarkan Tabel Peran (Excel: E = Edit, V = View, NONE = Tidak ada akses)
 export const ROLE_PERMISSIONS_MATRIX: Record<StandardMenuKey, Record<UserRole, AccessPermission>> = {
